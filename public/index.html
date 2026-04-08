@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f6c5b" />
+    <title>Programa Punto de Venta</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&family=Sora:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon-192.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+    <div class="grid-glow"></div>
+
+    <main class="shell">
+      <section class="hero-card">
+        <div class="hero-topbar">
+          <div class="language-switch" role="group" aria-label="Language switcher">
+            <button id="langEsBtn" class="lang-btn lang-btn-active" type="button">ES</button>
+            <button id="langViBtn" class="lang-btn" type="button">VI</button>
+          </div>
+        </div>
+
+        <div class="hero-copy">
+          <p id="heroEyebrow" class="eyebrow">Subscription tracker v4</p>
+          <h1>Programa Punto de Venta</h1>
+          <p id="heroSubtitle" class="subtitle">
+            Sigue los resultados diarios, el acumulado por 4 tipos de líneas y los premios dinámicos por niveles. Cada nivel tiene metas por tipo de línea y se pueden agregar nuevos niveles en el futuro.
+          </p>
+        </div>
+
+        <div class="hero-metrics">
+          <article class="metric-card">
+            <span id="metric1Type">Prepago</span>
+            <strong>New Line</strong>
+          </article>
+          <article class="metric-card">
+            <span id="metric2Type">Prepago</span>
+            <strong>Portabilidad</strong>
+          </article>
+          <article class="metric-card">
+            <span id="metric3Type">Postpago</span>
+            <strong>New Line</strong>
+          </article>
+          <article class="metric-card">
+            <span id="metric4Type">Postpago</span>
+            <strong>Portabilidad</strong>
+          </article>
+        </div>
+
+        <button id="installBtn" class="install-btn hidden" type="button">Instalar app en Android</button>
+      </section>
+
+      <section id="authPanel" class="panel auth-panel">
+        <div class="panel-head">
+          <p id="loginEyebrow" class="eyebrow">Ingreso</p>
+          <h2 id="loginTitle">Ingreso del punto de venta</h2>
+          <p id="loginText" class="panel-text">El usuario es el código del punto de venta, por ejemplo `CUSPS0001`. La contraseña es entregada por el sistema.</p>
+        </div>
+
+        <form id="loginForm" class="login-form">
+          <label class="field">
+            <span id="codeLabel">Código del punto de venta</span>
+            <input id="codeInput" name="code" type="text" placeholder="CUSPS0001" autocomplete="username" required />
+          </label>
+
+          <label class="field">
+            <span id="passwordLabel">Contraseña</span>
+            <input id="passwordInput" name="password" type="password" placeholder="Ingrese la contraseña" autocomplete="current-password" required />
+          </label>
+
+          <button id="loginBtn" class="primary-btn" type="submit">Entrar al dashboard</button>
+          <p id="authStatus" class="status-text"></p>
+        </form>
+      </section>
+
+      <section id="dashboardPanel" class="panel dashboard-panel hidden">
+        <div class="dashboard-topbar">
+          <div>
+            <p id="dashboardEyebrow" class="eyebrow">Dashboard diario</p>
+            <h2 id="storeName">Punto de venta</h2>
+            <p id="storeMeta" class="panel-text"></p>
+          </div>
+          <div class="topbar-actions">
+            <button id="refreshBtn" class="secondary-btn" type="button">Actualizar</button>
+            <button id="logoutBtn" class="ghost-btn" type="button">Cerrar sesión</button>
+          </div>
+        </div>
+
+        <div class="summary-grid">
+          <article class="summary-card summary-card-main">
+            <span id="totalRewardLabel">Premio total del mes</span>
+            <strong id="totalReward">S/ 0</strong>
+            <p id="totalRewardMeta" class="summary-note"></p>
+          </article>
+
+          <article class="summary-card summary-card-reward">
+            <span id="todayTotalLabel">Resultado de hoy</span>
+            <strong id="todayTotal">0 TB</strong>
+            <p id="todayDate" class="summary-note"></p>
+          </article>
+
+          <article class="summary-card">
+            <span id="cumulativeTotalLabel">Acumulado al día</span>
+            <strong id="cumulativeTotal">0 TB</strong>
+            <p id="cumulativeMeta" class="summary-note"></p>
+          </article>
+
+          <article class="summary-card">
+            <span id="achievedRewardLabel">Premio ya logrado</span>
+            <strong id="achievedReward">Sin logro</strong>
+            <p id="achievedLevel" class="summary-note">El punto de venta aún no alcanza un nivel de premio.</p>
+          </article>
+
+          <article class="summary-card">
+            <span id="nextRewardLabel">Siguiente meta</span>
+            <strong id="nextReward">S/ 0</strong>
+            <p id="nextLevel" class="summary-note"></p>
+          </article>
+        </div>
+
+        <section class="level-section">
+          <div class="section-head">
+            <h3 id="levelSectionTitle">Avance de niveles</h3>
+            <p id="levelSectionText" class="panel-text">Cada nivel solo se completa cuando los 4 tipos de línea cumplen sus metas del nivel.</p>
+          </div>
+          <div id="levelsGrid" class="levels-grid"></div>
+        </section>
+
+        <section class="category-section">
+          <div class="section-head">
+            <h3 id="categorySectionTitle">4 tipos de línea y metas</h3>
+            <p id="updatedAt" class="panel-text"></p>
+          </div>
+          <div id="categoriesGrid" class="categories-grid"></div>
+        </section>
+
+        <section class="history-section">
+          <div class="section-head">
+            <h3 id="historySectionTitle">Resultados de los últimos 7 días</h3>
+            <p id="historySectionText" class="panel-text">El gráfico muestra el total de líneas por día.</p>
+          </div>
+          <div id="historyGrid" class="history-grid"></div>
+        </section>
+
+        <p id="dashboardStatus" class="status-text"></p>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

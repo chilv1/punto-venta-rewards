@@ -1,0 +1,20 @@
+{
+  "name": "punto-venta-rewards-app",
+  "version": "1.0.0",
+  "description": "Android-ready point-of-sale rewards dashboard linked with Google Sheets.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "generate:sheet-template": "python3 scripts/generate_google_sheet_template.py"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@gradio/client": "^2.1.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "multer": "^2.0.2"
+  }
+}
