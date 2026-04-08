@@ -7,5 +7,12 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    ports:
-      - "127.0.0.1:3000:3000"
+    expose:
+      - "3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pdv.rule=Host(`pdv.bitelbot.com`)"
+      - "traefik.http.routers.pdv.entrypoints=websecure"
+      - "traefik.http.routers.pdv.tls=true"
+      - "traefik.http.routers.pdv.tls.certresolver=letsencrypt"
+      - "traefik.http.services.pdv.loadbalancer.server.port=3000"
