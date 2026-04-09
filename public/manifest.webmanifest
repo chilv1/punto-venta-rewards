@@ -3,8 +3,8 @@
   "short_name": "PDV Rewards",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f4efe7",
-  "theme_color": "#0f6c5b",
+  "background_color": "#0a1019",
+  "theme_color": "#0a1019",
   "description": "Ứng dụng theo dõi chỉ tiêu và thưởng cho điểm bán, cài được trên Android.",
   "icons": [
     {

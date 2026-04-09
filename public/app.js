@@ -1,81 +1,96 @@
+/* ============================================================
+   Punto de Venta Rewards — Mobile-First App v6
+   ============================================================ */
+
+/* ---------- 1. Constants & State ---------- */
 const storageKey = "sales-program-token";
 const roleKey = "sales-program-role";
 const languageKey = "sales-program-language";
 
-const authPanel = document.getElementById("authPanel");
-const dashboardPanel = document.getElementById("dashboardPanel");
-const adminPanel = document.getElementById("adminPanel");
-const loginForm = document.getElementById("loginForm");
-const loginBtn = document.getElementById("loginBtn");
-const codeInput = document.getElementById("codeInput");
-const passwordInput = document.getElementById("passwordInput");
-const authStatus = document.getElementById("authStatus");
+let deferredInstallPrompt = null;
+let currentLanguage = localStorage.getItem(languageKey) || "es";
+let latestDashboard = null;
+let latestAdminDashboard = null;
+let adminStoreQuery = "";
+let activeStoreTab = "storeHomeTab";
+let activeAdminTab = "adminOverviewTab";
+let adminCurrentPage = 1;
+let adminPageSize = 20;
+let selectedAdminStoreCode = "";
 
-const storeName = document.getElementById("storeName");
-const storeMeta = document.getElementById("storeMeta");
-const todayTotal = document.getElementById("todayTotal");
-const todayDate = document.getElementById("todayDate");
-const cumulativeTotal = document.getElementById("cumulativeTotal");
-const cumulativeMeta = document.getElementById("cumulativeMeta");
-const totalReward = document.getElementById("totalReward");
-const totalRewardMeta = document.getElementById("totalRewardMeta");
-const achievedReward = document.getElementById("achievedReward");
-const achievedLevel = document.getElementById("achievedLevel");
-const nextReward = document.getElementById("nextReward");
-const nextLevel = document.getElementById("nextLevel");
-const updatedAt = document.getElementById("updatedAt");
-const levelsGrid = document.getElementById("levelsGrid");
-const categoriesGrid = document.getElementById("categoriesGrid");
-const historyGrid = document.getElementById("historyGrid");
-const dashboardStatus = document.getElementById("dashboardStatus");
-const refreshBtn = document.getElementById("refreshBtn");
-const logoutBtn = document.getElementById("logoutBtn");
+/* ---------- 2. DOM References ---------- */
+const $ = (id) => document.getElementById(id);
 
-const adminName = document.getElementById("adminName");
-const adminMeta = document.getElementById("adminMeta");
-const adminTotalReward = document.getElementById("adminTotalReward");
-const adminTotalRewardMeta = document.getElementById("adminTotalRewardMeta");
-const adminStoresCount = document.getElementById("adminStoresCount");
-const adminStoresMeta = document.getElementById("adminStoresMeta");
-const adminTodayTotal = document.getElementById("adminTodayTotal");
-const adminTodayMeta = document.getElementById("adminTodayMeta");
-const adminCumulativeTotal = document.getElementById("adminCumulativeTotal");
-const adminCumulativeMeta = document.getElementById("adminCumulativeMeta");
-const adminStoreDetail = document.getElementById("adminStoreDetail");
-const adminAggregateCategoriesGrid = document.getElementById("adminAggregateCategoriesGrid");
-const adminAggregateLevelsGrid = document.getElementById("adminAggregateLevelsGrid");
-const adminStoresTableBody = document.getElementById("adminStoresTableBody");
-const adminStatus = document.getElementById("adminStatus");
-const adminRefreshBtn = document.getElementById("adminRefreshBtn");
-const exportBtn = document.getElementById("exportBtn");
-const adminLogoutBtn = document.getElementById("adminLogoutBtn");
-const storeSelector = document.getElementById("storeSelector");
-const storeSearchInput = document.getElementById("storeSearchInput");
-const adminPageSizeSelect = document.getElementById("adminPageSizeSelect");
-const adminPaginationInfo = document.getElementById("adminPaginationInfo");
-const adminPrevPageBtn = document.getElementById("adminPrevPageBtn");
-const adminNextPageBtn = document.getElementById("adminNextPageBtn");
-const adminTabTotalBtn = document.getElementById("adminTabTotalBtn");
-const adminTabStoreBtn = document.getElementById("adminTabStoreBtn");
-const adminTotalView = document.getElementById("adminTotalView");
-const adminStoreView = document.getElementById("adminStoreView");
+const loginScreen = $("loginScreen");
+const appShell = $("appShell");
+const storeApp = $("storeApp");
+const adminApp = $("adminApp");
+const loginForm = $("loginForm");
+const loginBtn = $("loginBtn");
+const codeInput = $("codeInput");
+const passwordInput = $("passwordInput");
+const authStatus = $("authStatus");
+const installBtn = $("installBtn");
+const toastContainer = $("toastContainer");
 
-const installBtn = document.getElementById("installBtn");
-const langEsBtn = document.getElementById("langEsBtn");
-const langViBtn = document.getElementById("langViBtn");
+/* Store DOM */
+const storeName = $("storeName");
+const storeMeta = $("storeMeta");
+const totalReward = $("totalReward");
+const totalRewardMeta = $("totalRewardMeta");
+const todayTotal = $("todayTotal");
+const todayDate = $("todayDate");
+const cumulativeTotal = $("cumulativeTotal");
+const cumulativeMeta = $("cumulativeMeta");
+const achievedReward = $("achievedReward");
+const achievedLevel = $("achievedLevel");
+const achCardReached = $("achCardReached");
+const nextReward = $("nextReward");
+const nextLevel = $("nextLevel");
+const updatedAt = $("updatedAt");
+const levelsGrid = $("levelsGrid");
+const categoriesGrid = $("categoriesGrid");
+const historyGrid = $("historyGrid");
+const dashboardStatus = $("dashboardStatus");
+const refreshBtn = $("refreshBtn");
+const logoutBtn = $("logoutBtn");
+const pullIndicator = $("pullIndicator");
+const storeContent = $("storeContent");
 
+/* Admin DOM */
+const adminNameEl = $("adminName");
+const adminMeta = $("adminMeta");
+const adminTotalReward = $("adminTotalReward");
+const adminTotalRewardMeta = $("adminTotalRewardMeta");
+const adminStoresCount = $("adminStoresCount");
+const adminStoresMeta = $("adminStoresMeta");
+const adminTodayTotal = $("adminTodayTotal");
+const adminTodayMeta = $("adminTodayMeta");
+const adminCumulativeTotal = $("adminCumulativeTotal");
+const adminCumulativeMeta = $("adminCumulativeMeta");
+const adminAggregateCategoriesGrid = $("adminAggregateCategoriesGrid");
+const adminAggregateLevelsGrid = $("adminAggregateLevelsGrid");
+const adminStoresTableBody = $("adminStoresTableBody");
+const adminPaginationInfo = $("adminPaginationInfo");
+const adminPrevPageBtn = $("adminPrevPageBtn");
+const adminNextPageBtn = $("adminNextPageBtn");
+const adminPageSizeSelect = $("adminPageSizeSelect");
+const adminRefreshBtn = $("adminRefreshBtn");
+const exportBtn = $("exportBtn");
+const adminLogoutBtn = $("adminLogoutBtn");
+const storeSearchInput = $("storeSearchInput");
+const storeSelector = $("storeSelector");
+const adminStoreDetail = $("adminStoreDetail");
+
+/* ---------- 3. Translations ---------- */
 const translations = {
   es: {
     htmlLang: "es",
     title: "Programa Punto de Venta",
-    heroEyebrow: "Subscription tracker v5",
-    heroSubtitle:
-      "Sigue resultados diarios, metas por tipo de línea, niveles dinámicos y ahora también un panel administrador para revisar todos los puntos de venta y exportar reportes.",
+    heroSubtitle: "Sigue resultados diarios, metas por tipo de línea, niveles dinámicos y panel administrador para reportes.",
     installBtn: "Instalar app en Android",
-    loginEyebrow: "Ingreso",
     loginTitle: "Ingreso del sistema",
-    loginText:
-      "Use el código del punto de venta o el usuario administrador. La contraseña es entregada por el sistema.",
+    loginText: "Use el código del punto de venta o el usuario administrador. La contraseña es entregada por el sistema.",
     codeLabel: "Usuario o código",
     passwordLabel: "Contraseña",
     passwordPlaceholder: "Ingrese la contraseña",
@@ -84,7 +99,7 @@ const translations = {
     adminEyebrow: "Panel administrador",
     defaultStoreName: "Punto de venta",
     defaultAdminName: "Administrador",
-    refreshBtn: "Actualizar",
+    refreshBtn: "Actualizar datos",
     exportBtn: "Exportar Excel",
     logoutBtn: "Cerrar sesión",
     todayTotalLabel: "Resultado de hoy",
@@ -95,8 +110,7 @@ const translations = {
     achievedRewardEmptyNote: "El punto de venta aún no alcanza un nivel de premio.",
     nextRewardLabel: "Siguiente meta",
     levelSectionTitle: "Avance de niveles",
-    levelSectionText:
-      "Cada nivel solo se completa cuando los 4 tipos de línea cumplen sus metas del nivel.",
+    levelSectionText: "Cada nivel solo se completa cuando los 4 tipos de línea cumplen sus metas del nivel.",
     categorySectionTitle: "4 tipos de línea y metas",
     categoryNames: {
       prepaid_new_line: "Prepago New Line",
@@ -105,52 +119,49 @@ const translations = {
       postpaid_portabilidad: "Postpago Portabilidad"
     },
     shortNames: {
-      prepaid_new_line: "Pre New Line",
+      prepaid_new_line: "Pre NL",
       prepaid_portabilidad: "Pre Porta",
-      postpaid_new_line: "Post New Line",
+      postpaid_new_line: "Post NL",
       postpaid_portabilidad: "Post Porta"
     },
-    historySectionTitle: "Resultados de los últimos 7 días",
-    historySectionText: "El gráfico muestra el total de líneas por día.",
-    todayDatePrefix: "Fecha registrada:",
-    cumulativeMeta: ({ target, progress }) => `Meta ${target} • Cumplimiento ${progress}`,
+    historySectionTitle: "Resultados últimos 7 días",
+    historySectionText: "Total de líneas por día.",
+    todayDatePrefix: "Fecha:",
+    cumulativeMeta: ({ target, progress }) => `Meta ${target} • ${progress}`,
     totalRewardMeta: ({ levelReward, categoryRewardTotal, monthLabel }) =>
-      `Nivel más alto ${levelReward} • Tipos de línea ${categoryRewardTotal} • ${monthLabel}`,
-    monthLabel: ({ month, year }) => `Mes ${month}/${year}`,
-    achievedLevelDone: ({ label }) => `${label} ya fue completado.`,
-    nextLevelWaiting: ({ label }) => `${label}: esperando completar las metas faltantes.`,
+      `Nivel ${levelReward} • Líneas ${categoryRewardTotal} • ${monthLabel}`,
+    monthLabel: ({ month, year }) => `${month}/${year}`,
+    achievedLevelDone: ({ label }) => `${label} completado.`,
+    nextLevelWaiting: ({ label }) => `${label}: esperando metas.`,
     nextLevelMissing: ({ label, missing }) => `${label}: ${missing}`,
-    nextLevelMax: "Ya superó todos los niveles configurados.",
+    nextLevelMax: "Todos los niveles superados.",
     levelDone: "Logrado",
     levelNotDone: ({ progress }) => progress,
     levelFootDone: ({ label, reward }) => `${label} completado. Premio ${reward}.`,
-    levelFootPending: "Completa todas las metas internas para alcanzar este nivel.",
-    requirementDone: "Logrado",
+    levelFootPending: "Completa todas las metas para alcanzar este nivel.",
+    requirementDone: "✓",
     categoryRewardLabel: "Premio",
     categoryReached: "Meta lograda",
     categoryNotReached: ({ progress }) => progress,
     statToday: "Hoy",
     statTarget: "Meta",
-    statCumulative: "Acumulado",
+    statCumulative: "Acum.",
     statRemaining: "Falta",
     categoryFootDone: ({ reward }) => `Meta cumplida. Premio ${reward}.`,
-    categoryFootPending: ({ remaining }) => `Faltan ${remaining} para cumplir la meta.`,
+    categoryFootPending: ({ remaining }) => `Faltan ${remaining} para la meta.`,
     rewardNotConfigured: "Sin premio",
-    updatedAt: ({ value }) => `Actualizado a las ${value}`,
-    historyEmpty: "Aún no hay datos en los últimos 7 días.",
-    dashboardSynced:
-      "Datos sincronizados con Google Sheets. Actualiza DailyResults y pulsa Actualizar.",
-    dashboardLoading: "Sincronizando resultados diarios y acumulados...",
-    adminDashboardSynced:
-      "Panel administrador sincronizado. Puede revisar cada punto de venta y exportar el consolidado.",
-    adminDashboardLoading: "Sincronizando panel administrador...",
+    updatedAt: ({ value }) => `Actualizado ${value}`,
+    historyEmpty: "Sin datos en 7 días.",
+    dashboardSynced: "Datos sincronizados.",
+    dashboardLoading: "Sincronizando...",
+    adminDashboardSynced: "Panel sincronizado.",
+    adminDashboardLoading: "Sincronizando panel...",
     loginLoading: "Ingresando...",
     logoutDone: "Sesión cerrada.",
-    authInvalid: "La sesión no es válida.",
-    unsupportedRequest: "No se pudo procesar la solicitud.",
-    authError: "No se pudo ingresar.",
+    authInvalid: "Sesión no válida.",
+    unsupportedRequest: "No se pudo procesar.",
+    authError: "Error al ingresar.",
     missingFields: "Ingrese usuario y contraseña.",
-    installGroupLabel: "Selector de idioma",
     countLineSingular: "Línea",
     countLinePlural: "Líneas",
     adminTotalRewardLabel: "Premio total de todos los puntos",
@@ -158,61 +169,62 @@ const translations = {
     adminTodayTotalLabel: "Resultado de hoy",
     adminCumulativeTotalLabel: "Acumulado total",
     adminTotalRewardMeta: ({ levelReward, categoryReward, monthLabel }) =>
-      `Niveles ${levelReward} • Tipos de línea ${categoryReward} • ${monthLabel}`,
-    adminStoresMeta: ({ storesCount }) => `${storesCount} puntos con datos en el mes actual.`,
-    adminTodayMeta: ({ updatedAt }) => `Última actualización ${updatedAt}`,
-    adminCumulativeMeta: ({ target, progress }) => `Meta consolidada ${target} • Cumplimiento ${progress}`,
+      `Niveles ${levelReward} • Líneas ${categoryReward} • ${monthLabel}`,
+    adminStoresMeta: ({ storesCount }) => `${storesCount} puntos en el mes.`,
+    adminTodayMeta: ({ updatedAt }) => `Última: ${updatedAt}`,
+    adminCumulativeMeta: ({ target, progress }) => `Meta ${target} • ${progress}`,
     adminStoreSectionTitle: "Detalle por punto de venta",
-    adminStoreSectionText:
-      "Seleccione un punto de venta para revisar sus metas por tipo de línea, niveles y premio total.",
-    adminTabTotal: "Total",
-    adminTabStore: "Punto de venta",
-    storeSearchLabel: "Buscar por código",
-    storeSearchPlaceholder: "CUSPS0001",
-    storeSelectorLabel: "Punto de venta",
+    adminStoreSectionText: "Seleccione un punto para ver metas y premio.",
     adminAggregateCategoryTitle: "Consolidado por tipo de línea",
-    adminAggregateCategoryText: "Resumen de todas las líneas y metas de todos los puntos de venta.",
+    adminAggregateCategoryText: "Resumen de líneas y metas de todos los puntos.",
     adminAggregateLevelTitle: "Consolidado por niveles",
-    adminAggregateLevelText:
-      "Cada nivel muestra el avance acumulado y cuántos puntos de venta ya lo lograron.",
+    adminAggregateLevelText: "Avance acumulado y puntos que lograron cada nivel.",
     adminStoresTableTitle: "Todos los puntos de venta",
-    adminStoresTableText:
-      "Vista rápida de cumplimiento, premio total y nivel alcanzado por cada punto.",
-    adminPageSizeLabel: "Filas por página",
+    adminStoresTableText: "Cumplimiento y premio por punto.",
+    adminPageSizeLabel: "Filas",
     paginationPrev: "Anterior",
     paginationNext: "Siguiente",
     paginationInfo: ({ start, end, total, page, pages }) =>
-      `Mostrando ${start}-${end} de ${total} puntos • Página ${page}/${pages}`,
+      `${start}-${end} de ${total} • Pág ${page}/${pages}`,
     tableCode: "Código",
     tableName: "Punto",
     tableArea: "Zona",
-    tableReward: "Premio total",
+    tableReward: "Premio",
     tableProgress: "Avance",
     tableLevel: "Nivel",
     adminStoreDetailTitle: ({ name, code }) => `${name} • ${code}`,
     adminStoreDetailMeta: ({ area }) => area || "Sin zona",
     adminAggregateReachedStores: ({ count }) => `${count} puntos logrados`,
-    adminAggregateLevelFoot: ({ reached, total }) => `${reached} de ${total} puntos ya lograron este nivel.`,
-    adminNoStores: "No hay puntos de venta disponibles.",
-    adminNoStoreMatch: "No se encontró ningún punto de venta con ese código.",
-    adminStorePrompt: "Ingrese el código del punto de venta para ver su detalle.",
-    adminStoreSearchLoading: "Buscando puntos de venta...",
-    adminStoreDetailLoading: "Cargando detalle del punto de venta...",
-    exportLoading: "Generando archivo Excel...",
-    exportDone: "Archivo Excel descargado.",
-    exportFilename: ({ monthKey }) => `reporte-pdv-${monthKey}.xlsx`
+    adminAggregateLevelFoot: ({ reached, total }) => `${reached}/${total} puntos lograron este nivel.`,
+    adminNoStores: "Sin puntos de venta.",
+    adminNoStoreMatch: "No encontrado.",
+    adminStorePrompt: "Ingrese código para ver detalle.",
+    adminStoreSearchLoading: "Buscando...",
+    adminStoreDetailLoading: "Cargando detalle...",
+    exportLoading: "Generando Excel...",
+    exportDone: "Excel descargado.",
+    exportFilename: ({ monthKey }) => `reporte-pdv-${monthKey}.xlsx`,
+    storeSearchLabel: "Buscar por código",
+    storeSelectorLabel: "Punto de venta",
+    pullRefresh: "Actualizando...",
+    navHome: "Inicio",
+    navLevels: "Niveles",
+    navLines: "Líneas",
+    navMore: "Más",
+    navOverview: "Resumen",
+    navStores: "Puntos",
+    moreLangTitle: "Idioma",
+    moreLangLabel: "Seleccionar idioma",
+    moreActionsTitle: "Acciones",
+    moreInstall: "Instalar app"
   },
   vi: {
     htmlLang: "vi",
     title: "Programa Punto de Venta",
-    heroEyebrow: "Subscription tracker v5",
-    heroSubtitle:
-      "Theo dõi kết quả ngày, chỉ tiêu theo loại thuê bao, mức thưởng động và thêm panel quản trị để xem toàn bộ điểm bán và xuất báo cáo Excel.",
+    heroSubtitle: "Theo dõi kết quả ngày, chỉ tiêu theo thuê bao, mức thưởng động và panel quản trị xuất báo cáo.",
     installBtn: "Cài app trên Android",
-    loginEyebrow: "Ingreso",
     loginTitle: "Đăng nhập hệ thống",
-    loginText:
-      "Dùng mã điểm bán hoặc user admin. Mật khẩu do hệ thống cấp.",
+    loginText: "Dùng mã điểm bán hoặc user admin. Mật khẩu do hệ thống cấp.",
     codeLabel: "User hoặc mã điểm bán",
     passwordLabel: "Mật khẩu",
     passwordPlaceholder: "Nhập mật khẩu",
@@ -221,7 +233,7 @@ const translations = {
     adminEyebrow: "Panel quản trị",
     defaultStoreName: "Điểm bán",
     defaultAdminName: "Quản trị",
-    refreshBtn: "Làm mới",
+    refreshBtn: "Làm mới dữ liệu",
     exportBtn: "Xuất Excel",
     logoutBtn: "Đăng xuất",
     todayTotalLabel: "Kết quả hôm nay",
@@ -231,10 +243,9 @@ const translations = {
     achievedRewardEmpty: "Chưa đạt",
     achievedRewardEmptyNote: "Điểm bán chưa chạm mức thưởng nào.",
     nextRewardLabel: "Mốc kế tiếp",
-    levelSectionTitle: "Tiến độ các mức chỉ tiêu",
-    levelSectionText:
-      "Mỗi mức chỉ hoàn thành khi cả 4 loại thuê bao đều đạt chỉ tiêu của mức đó.",
-    categorySectionTitle: "4 loại thuê bao và chỉ tiêu",
+    levelSectionTitle: "Tiến độ các mức",
+    levelSectionText: "Mỗi mức chỉ hoàn thành khi cả 4 loại thuê bao đều đạt.",
+    categorySectionTitle: "4 loại thuê bao",
     categoryNames: {
       prepaid_new_line: "Trả trước New Line",
       prepaid_portabilidad: "Trả trước Portabilidad",
@@ -242,210 +253,138 @@ const translations = {
       postpaid_portabilidad: "Trả sau Portabilidad"
     },
     shortNames: {
-      prepaid_new_line: "Pre New Line",
+      prepaid_new_line: "Pre NL",
       prepaid_portabilidad: "Pre Porta",
-      postpaid_new_line: "Post New Line",
+      postpaid_new_line: "Post NL",
       postpaid_portabilidad: "Post Porta"
     },
     historySectionTitle: "Kết quả 7 ngày gần nhất",
-    historySectionText: "Biểu đồ đang hiển thị tổng số thuê bao theo ngày.",
-    todayDatePrefix: "Ngày ghi nhận:",
-    cumulativeMeta: ({ target, progress }) => `Chỉ tiêu ${target} • Hoàn thành ${progress}`,
+    historySectionText: "Tổng số thuê bao theo ngày.",
+    todayDatePrefix: "Ngày:",
+    cumulativeMeta: ({ target, progress }) => `CT ${target} • ${progress}`,
     totalRewardMeta: ({ levelReward, categoryRewardTotal, monthLabel }) =>
-      `Mức cao nhất ${levelReward} • 4 loại thuê bao ${categoryRewardTotal} • ${monthLabel}`,
-    monthLabel: ({ month, year }) => `Tháng ${month}/${year}`,
-    achievedLevelDone: ({ label }) => `${label} đã hoàn thành.`,
-    nextLevelWaiting: ({ label }) => `${label}: đang chờ hoàn tất các chỉ tiêu con.`,
+      `Mức ${levelReward} • TB ${categoryRewardTotal} • ${monthLabel}`,
+    monthLabel: ({ month, year }) => `T${month}/${year}`,
+    achievedLevelDone: ({ label }) => `${label} đã đạt.`,
+    nextLevelWaiting: ({ label }) => `${label}: đang chờ.`,
     nextLevelMissing: ({ label, missing }) => `${label}: ${missing}`,
-    nextLevelMax: "Đã vượt toàn bộ các mức chỉ tiêu.",
+    nextLevelMax: "Đã vượt toàn bộ mức.",
     levelDone: "Đã đạt",
     levelNotDone: ({ progress }) => progress,
-    levelFootDone: ({ label, reward }) => `Đã đạt ${label} và nhận ${reward}.`,
-    levelFootPending: "Cần hoàn thành đủ các chỉ tiêu con để chạm mức này.",
-    requirementDone: "Đạt",
+    levelFootDone: ({ label, reward }) => `Đã đạt ${label}, nhận ${reward}.`,
+    levelFootPending: "Cần hoàn thành đủ chỉ tiêu con.",
+    requirementDone: "✓",
     categoryRewardLabel: "Thưởng",
     categoryReached: "Đạt chỉ tiêu",
     categoryNotReached: ({ progress }) => progress,
     statToday: "Ngày",
-    statTarget: "Chỉ tiêu",
-    statCumulative: "Luỹ kế",
-    statRemaining: "Còn lại",
-    categoryFootDone: ({ reward }) => `Đã hoàn thành chỉ tiêu nhóm thuê bao này và nhận ${reward}.`,
-    categoryFootPending: ({ remaining }) => `Cần thêm ${remaining} để đạt chỉ tiêu.`,
-    rewardNotConfigured: "Chưa cấu hình thưởng",
-    updatedAt: ({ value }) => `Cập nhật lúc ${value}`,
-    historyEmpty: "Chưa có dữ liệu 7 ngày gần nhất.",
-    dashboardSynced:
-      "Dữ liệu đã đồng bộ từ Google Sheets. Chỉ cần cập nhật lại DailyResults rồi bấm Làm mới.",
-    dashboardLoading: "Đang đồng bộ kết quả ngày và luỹ kế...",
-    adminDashboardSynced:
-      "Panel quản trị đã đồng bộ. Có thể xem từng điểm bán và xuất báo cáo tổng hợp.",
-    adminDashboardLoading: "Đang đồng bộ panel quản trị...",
+    statTarget: "CT",
+    statCumulative: "LK",
+    statRemaining: "Còn",
+    categoryFootDone: ({ reward }) => `Đạt chỉ tiêu, nhận ${reward}.`,
+    categoryFootPending: ({ remaining }) => `Cần thêm ${remaining}.`,
+    rewardNotConfigured: "Chưa cấu hình",
+    updatedAt: ({ value }) => `Cập nhật ${value}`,
+    historyEmpty: "Chưa có dữ liệu 7 ngày.",
+    dashboardSynced: "Đã đồng bộ.",
+    dashboardLoading: "Đang đồng bộ...",
+    adminDashboardSynced: "Panel đã đồng bộ.",
+    adminDashboardLoading: "Đang đồng bộ panel...",
     loginLoading: "Đang đăng nhập...",
     logoutDone: "Đã đăng xuất.",
-    authInvalid: "Phiên đăng nhập không hợp lệ.",
-    unsupportedRequest: "Không thể xử lý yêu cầu.",
+    authInvalid: "Phiên không hợp lệ.",
+    unsupportedRequest: "Không thể xử lý.",
     authError: "Không thể đăng nhập.",
-    missingFields: "Vui lòng nhập user và mật khẩu.",
-    installGroupLabel: "Chuyển ngôn ngữ",
+    missingFields: "Nhập user và mật khẩu.",
     countLineSingular: "TB",
     countLinePlural: "TB",
-    adminTotalRewardLabel: "Tổng thưởng của tất cả điểm bán",
+    adminTotalRewardLabel: "Tổng thưởng tất cả điểm bán",
     adminStoresCountLabel: "Số điểm bán",
     adminTodayTotalLabel: "Kết quả hôm nay",
     adminCumulativeTotalLabel: "Luỹ kế tổng",
     adminTotalRewardMeta: ({ levelReward, categoryReward, monthLabel }) =>
-      `Thưởng mức ${levelReward} • Thưởng loại thuê bao ${categoryReward} • ${monthLabel}`,
-    adminStoresMeta: ({ storesCount }) => `${storesCount} điểm bán có dữ liệu trong tháng hiện tại.`,
-    adminTodayMeta: ({ updatedAt }) => `Lần cập nhật ${updatedAt}`,
-    adminCumulativeMeta: ({ target, progress }) => `Chỉ tiêu tổng ${target} • Hoàn thành ${progress}`,
-    adminStoreSectionTitle: "Chi tiết theo điểm bán",
-    adminStoreSectionText:
-      "Chọn một điểm bán để xem chỉ tiêu theo thuê bao, theo mức và tổng thưởng.",
-    adminTabTotal: "Total",
-    adminTabStore: "Từng điểm bán",
-    storeSearchLabel: "Tìm theo mã điểm bán",
-    storeSearchPlaceholder: "CUSPS0001",
-    storeSelectorLabel: "Điểm bán",
-    adminAggregateCategoryTitle: "Tổng hợp theo loại thuê bao",
-    adminAggregateCategoryText: "Tổng hợp chỉ tiêu và kết quả của tất cả điểm bán.",
+      `Mức ${levelReward} • TB ${categoryReward} • ${monthLabel}`,
+    adminStoresMeta: ({ storesCount }) => `${storesCount} điểm bán trong tháng.`,
+    adminTodayMeta: ({ updatedAt }) => `Lần cuối ${updatedAt}`,
+    adminCumulativeMeta: ({ target, progress }) => `CT tổng ${target} • ${progress}`,
+    adminStoreSectionTitle: "Chi tiết điểm bán",
+    adminStoreSectionText: "Chọn điểm bán để xem chỉ tiêu.",
+    adminAggregateCategoryTitle: "Tổng hợp theo loại TB",
+    adminAggregateCategoryText: "Tổng hợp tất cả điểm bán.",
     adminAggregateLevelTitle: "Tổng hợp theo mức",
-    adminAggregateLevelText:
-      "Mỗi mức cho biết tiến độ cộng gộp và số điểm bán đã hoàn thành mức đó.",
+    adminAggregateLevelText: "Tiến độ cộng gộp và số điểm bán đạt.",
     adminStoresTableTitle: "Tất cả điểm bán",
-    adminStoresTableText:
-      "Xem nhanh mức hoàn thành, tổng thưởng và mức đã đạt của từng điểm bán.",
-    adminPageSizeLabel: "Số dòng mỗi trang",
-    paginationPrev: "Trang trước",
-    paginationNext: "Trang sau",
+    adminStoresTableText: "Mức hoàn thành và thưởng.",
+    adminPageSizeLabel: "Số dòng",
+    paginationPrev: "Trước",
+    paginationNext: "Sau",
     paginationInfo: ({ start, end, total, page, pages }) =>
-      `Hiển thị ${start}-${end} trên ${total} điểm bán • Trang ${page}/${pages}`,
+      `${start}-${end}/${total} • Trang ${page}/${pages}`,
     tableCode: "Mã",
     tableName: "Điểm bán",
-    tableArea: "Khu vực",
-    tableReward: "Tổng thưởng",
-    tableProgress: "Tiến độ",
+    tableArea: "KV",
+    tableReward: "Thưởng",
+    tableProgress: "TĐ",
     tableLevel: "Mức",
     adminStoreDetailTitle: ({ name, code }) => `${name} • ${code}`,
-    adminStoreDetailMeta: ({ area }) => area || "Chưa có khu vực",
-    adminAggregateReachedStores: ({ count }) => `${count} điểm bán đạt`,
-    adminAggregateLevelFoot: ({ reached, total }) => `${reached}/${total} điểm bán đã đạt mức này.`,
-    adminNoStores: "Chưa có điểm bán nào.",
-    adminNoStoreMatch: "Không tìm thấy điểm bán nào theo mã này.",
-    adminStorePrompt: "Nhập mã điểm bán để xem chi tiết.",
-    adminStoreSearchLoading: "Đang tìm điểm bán...",
-    adminStoreDetailLoading: "Đang tải chi tiết điểm bán...",
-    exportLoading: "Đang tạo file Excel...",
-    exportDone: "Đã tải file Excel.",
-    exportFilename: ({ monthKey }) => `bao-cao-pdv-${monthKey}.xlsx`
+    adminStoreDetailMeta: ({ area }) => area || "Chưa có KV",
+    adminAggregateReachedStores: ({ count }) => `${count} điểm đạt`,
+    adminAggregateLevelFoot: ({ reached, total }) => `${reached}/${total} điểm đạt mức này.`,
+    adminNoStores: "Chưa có điểm bán.",
+    adminNoStoreMatch: "Không tìm thấy.",
+    adminStorePrompt: "Nhập mã điểm bán.",
+    adminStoreSearchLoading: "Đang tìm...",
+    adminStoreDetailLoading: "Đang tải...",
+    exportLoading: "Đang tạo Excel...",
+    exportDone: "Đã tải Excel.",
+    exportFilename: ({ monthKey }) => `bao-cao-pdv-${monthKey}.xlsx`,
+    storeSearchLabel: "Tìm theo mã",
+    storeSelectorLabel: "Điểm bán",
+    pullRefresh: "Đang làm mới...",
+    navHome: "Trang chủ",
+    navLevels: "Mức",
+    navLines: "TB",
+    navMore: "Thêm",
+    navOverview: "Tổng hợp",
+    navStores: "Điểm bán",
+    moreLangTitle: "Ngôn ngữ",
+    moreLangLabel: "Chọn ngôn ngữ",
+    moreActionsTitle: "Hành động",
+    moreInstall: "Cài app"
   }
 };
 
 const serverMessageMap = {
-  "Vui lòng đăng nhập.": { es: "Inicie sesión para continuar.", vi: "Vui lòng đăng nhập." },
-  "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.": {
-    es: "La sesión expiró. Vuelva a ingresar.",
-    vi: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
-  },
-  "Sai mã điểm bán hoặc mật khẩu.": {
-    es: "Usuario, código o contraseña incorrectos.",
-    vi: "Sai user, mã điểm bán hoặc mật khẩu."
-  },
-  "Không thể tải dashboard.": {
-    es: "No se pudo cargar el dashboard.",
-    vi: "Không thể tải dashboard."
-  },
-  "Không thể đăng nhập lúc này.": {
-    es: "No se pudo iniciar sesión en este momento.",
-    vi: "Không thể đăng nhập lúc này."
-  },
-  "Điểm bán không còn tồn tại trên hệ thống.": {
-    es: "El punto de venta ya no existe en el sistema.",
-    vi: "Điểm bán không còn tồn tại trên hệ thống."
-  },
-  "Vui lòng nhập mã điểm bán và mật khẩu.": {
-    es: "Ingrese usuario o código y la contraseña.",
-    vi: "Vui lòng nhập user hoặc mã điểm bán và mật khẩu."
-  },
-  "Bạn không có quyền truy cập khu vực này.": {
-    es: "No tiene permisos para acceder a esta zona.",
-    vi: "Bạn không có quyền truy cập khu vực này."
-  },
-  "Không thể tải dashboard quản trị.": {
-    es: "No se pudo cargar el panel administrador.",
-    vi: "Không thể tải dashboard quản trị."
-  },
-  "Không thể xuất file Excel.": {
-    es: "No se pudo exportar el archivo Excel.",
-    vi: "Không thể xuất file Excel."
-  },
-  "Không thể tìm kiếm điểm bán.": {
-    es: "No se pudo buscar puntos de venta.",
-    vi: "Không thể tìm kiếm điểm bán."
-  },
-  "Không thể tải chi tiết điểm bán.": {
-    es: "No se pudo cargar el detalle del punto de venta.",
-    vi: "Không thể tải chi tiết điểm bán."
-  },
-  "Vui lòng nhập mã điểm bán.": {
-    es: "Ingrese el código del punto de venta.",
-    vi: "Vui lòng nhập mã điểm bán."
-  }
+  "Vui lòng đăng nhập.": { es: "Inicie sesión.", vi: "Vui lòng đăng nhập." },
+  "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.": { es: "Sesión expiró.", vi: "Phiên đã hết hạn." },
+  "Sai mã điểm bán hoặc mật khẩu.": { es: "Usuario o contraseña incorrectos.", vi: "Sai user hoặc mật khẩu." },
+  "Không thể tải dashboard.": { es: "No se pudo cargar.", vi: "Không thể tải." },
+  "Không thể đăng nhập lúc này.": { es: "No se pudo iniciar sesión.", vi: "Không thể đăng nhập." },
+  "Điểm bán không còn tồn tại trên hệ thống.": { es: "Punto ya no existe.", vi: "Điểm bán không còn." },
+  "Vui lòng nhập mã điểm bán và mật khẩu.": { es: "Ingrese usuario y contraseña.", vi: "Nhập user và mật khẩu." },
+  "Bạn không có quyền truy cập khu vực này.": { es: "Sin permisos.", vi: "Không có quyền." },
+  "Không thể tải dashboard quản trị.": { es: "No se pudo cargar panel.", vi: "Không thể tải panel." },
+  "Không thể xuất file Excel.": { es: "No se pudo exportar.", vi: "Không thể xuất." },
+  "Không thể tìm kiếm điểm bán.": { es: "No se pudo buscar.", vi: "Không thể tìm." },
+  "Không thể tải chi tiết điểm bán.": { es: "No se pudo cargar detalle.", vi: "Không thể tải chi tiết." },
+  "Vui lòng nhập mã điểm bán.": { es: "Ingrese código.", vi: "Nhập mã điểm bán." }
 };
 
-let deferredInstallPrompt = null;
-let currentLanguage = localStorage.getItem(languageKey) || "es";
-let latestDashboard = null;
-let latestAdminDashboard = null;
-let adminStoreQuery = "";
-let activeAdminTab = "total";
-let adminCurrentPage = 1;
-let adminPageSize = Number(adminPageSizeSelect?.value || 20);
-let selectedAdminStoreCode = "";
-
-function getToken() {
-  return localStorage.getItem(storageKey) || "";
-}
-
-function setToken(token) {
-  if (token) {
-    localStorage.setItem(storageKey, token);
-  } else {
-    localStorage.removeItem(storageKey);
-  }
-}
-
-function getRole() {
-  return localStorage.getItem(roleKey) || "";
-}
-
-function setRole(role) {
-  if (role) {
-    localStorage.setItem(roleKey, role);
-  } else {
-    localStorage.removeItem(roleKey);
-  }
-}
-
-function clearSession() {
-  setToken("");
-  setRole("");
-}
-
-function getLocale() {
-  return currentLanguage === "es" ? "es-PE" : "vi-VN";
-}
+/* ---------- 4. Utility Functions ---------- */
+function getToken() { return localStorage.getItem(storageKey) || ""; }
+function setToken(v) { v ? localStorage.setItem(storageKey, v) : localStorage.removeItem(storageKey); }
+function getRole() { return localStorage.getItem(roleKey) || ""; }
+function setRole(v) { v ? localStorage.setItem(roleKey, v) : localStorage.removeItem(roleKey); }
+function clearSession() { setToken(""); setRole(""); }
+function getLocale() { return currentLanguage === "es" ? "es-PE" : "vi-VN"; }
 
 function t(key, params = {}) {
   const value = translations[currentLanguage][key];
-  if (typeof value === "function") {
-    return value(params);
-  }
-  return value ?? key;
+  return typeof value === "function" ? value(params) : (value ?? key);
 }
 
-function localizeServerMessage(message) {
-  return serverMessageMap[message]?.[currentLanguage] || message;
+function localizeServerMessage(msg) {
+  return serverMessageMap[msg]?.[currentLanguage] || msg;
 }
 
 function getCategoryLabel(id, fallback = "") {
@@ -457,118 +396,161 @@ function getShortLabel(id, fallback = "") {
 }
 
 function getLevelLabel(label) {
-  const match = String(label || "").match(/(\d+)/);
-  if (!match) {
-    return label;
-  }
-  return currentLanguage === "es" ? `Nivel ${match[1]}` : `Mức ${match[1]}`;
+  const m = String(label || "").match(/(\d+)/);
+  if (!m) return label;
+  return currentLanguage === "es" ? `Nivel ${m[1]}` : `Mức ${m[1]}`;
 }
 
-function setStatus(target, message, isError = false) {
-  if (!target) {
-    return;
-  }
-  target.textContent = message;
-  target.classList.toggle("status-error", isError);
+function formatNumber(v) {
+  return new Intl.NumberFormat(getLocale(), { maximumFractionDigits: 0 }).format(Number(v || 0));
 }
 
-function setViewMode(mode) {
-  authPanel.classList.toggle("hidden", mode !== "auth");
-  dashboardPanel.classList.toggle("hidden", mode !== "store");
-  adminPanel.classList.toggle("hidden", mode !== "admin");
-}
-
-function setTextById(id, value) {
-  const element = document.getElementById(id);
-  if (element) {
-    element.textContent = value;
-  }
-}
-
-function formatNumber(value) {
-  return new Intl.NumberFormat(getLocale(), {
-    maximumFractionDigits: 0
-  }).format(Number(value || 0));
-}
-
-function getCountUnit(value) {
-  if (currentLanguage === "es") {
-    return Number(value || 0) === 1 ? t("countLineSingular") : t("countLinePlural");
-  }
+function getCountUnit(v) {
+  if (currentLanguage === "es") return Number(v || 0) === 1 ? t("countLineSingular") : t("countLinePlural");
   return t("countLinePlural");
 }
 
-function formatCount(value) {
-  return `${formatNumber(value)} ${getCountUnit(value)}`;
+function formatCount(v) { return `${formatNumber(v)} ${getCountUnit(v)}`; }
+
+function formatCurrency(v) {
+  return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN", maximumFractionDigits: 0 }).format(Number(v || 0));
 }
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat("es-PE", {
-    style: "currency",
-    currency: "PEN",
-    maximumFractionDigits: 0
-  }).format(Number(value || 0));
+function formatPercent(v) { return `${Math.round(Number(v || 0))}%`; }
+
+function formatDisplayDate(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return new Intl.DateTimeFormat(getLocale(), { weekday: "short", day: "2-digit", month: "2-digit" }).format(d);
 }
 
-function formatPercent(value) {
-  return `${Math.round(Number(value || 0))}%`;
+function formatTimestamp(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat(getLocale(), { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }).format(d);
 }
 
-function formatDisplayDate(dateString) {
-  if (!dateString) {
-    return "";
-  }
-
-  const date = new Date(`${dateString}T00:00:00`);
-  if (Number.isNaN(date.getTime())) {
-    return dateString;
-  }
-
-  return new Intl.DateTimeFormat(getLocale(), {
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  }).format(date);
+function setTextById(id, value) {
+  const el = $(id);
+  if (el) el.textContent = value;
 }
 
-function formatTimestamp(dateString) {
-  if (!dateString) {
-    return "";
-  }
+/* ---------- 5. Toast System ---------- */
+function showToast(message, type = "info", duration = 3000) {
+  const toast = document.createElement("div");
+  toast.className = `toast${type === "error" ? " is-error" : type === "success" ? " is-success" : ""}`;
+  toast.textContent = message;
+  toastContainer.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add("is-leaving");
+    toast.addEventListener("animationend", () => toast.remove());
+  }, duration);
+}
 
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
+/* ---------- 6. View Management ---------- */
+function showLogin() {
+  loginScreen.classList.remove("hidden");
+  appShell.classList.add("hidden");
+  storeApp.classList.add("hidden");
+  adminApp.classList.add("hidden");
+}
 
-  return new Intl.DateTimeFormat(getLocale(), {
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "2-digit",
-    month: "2-digit"
-  }).format(date);
+function showStoreApp() {
+  loginScreen.classList.add("hidden");
+  appShell.classList.remove("hidden");
+  storeApp.classList.remove("hidden");
+  adminApp.classList.add("hidden");
+}
+
+function showAdminApp() {
+  loginScreen.classList.add("hidden");
+  appShell.classList.remove("hidden");
+  storeApp.classList.add("hidden");
+  adminApp.classList.remove("hidden");
+}
+
+/* ---------- 7. Tab Navigation ---------- */
+function switchTab(navContainer, contentContainer, tabId) {
+  // Update nav buttons
+  navContainer.querySelectorAll(".nav-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.tab === tabId);
+  });
+  // Update panels
+  contentContainer.querySelectorAll(".tab-panel").forEach(panel => {
+    panel.classList.toggle("active", panel.id === tabId);
+  });
+  // Scroll content to top
+  const contentArea = contentContainer.querySelector(".content-area");
+  if (contentArea) contentArea.scrollTop = 0;
+}
+
+function setupTabNavigation(navEl, contentEl, onSwitch) {
+  navEl.querySelectorAll(".nav-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tabId = btn.dataset.tab;
+      switchTab(navEl, contentEl, tabId);
+      if (onSwitch) onSwitch(tabId);
+    });
+  });
+}
+
+/* ---------- 8. Pull to Refresh ---------- */
+function setupPullToRefresh(contentEl, indicatorEl, onRefresh) {
+  let startY = 0;
+  let pulling = false;
+
+  contentEl.addEventListener("touchstart", (e) => {
+    if (contentEl.scrollTop <= 0) {
+      startY = e.touches[0].clientY;
+      pulling = true;
+    }
+  }, { passive: true });
+
+  contentEl.addEventListener("touchmove", (e) => {
+    if (!pulling) return;
+    const delta = e.touches[0].clientY - startY;
+    if (delta > 60 && contentEl.scrollTop <= 0) {
+      indicatorEl.classList.add("is-visible");
+    }
+  }, { passive: true });
+
+  contentEl.addEventListener("touchend", () => {
+    if (indicatorEl.classList.contains("is-visible")) {
+      onRefresh();
+      setTimeout(() => indicatorEl.classList.remove("is-visible"), 1500);
+    }
+    pulling = false;
+  });
+}
+
+/* ---------- 9. Language ---------- */
+function syncAllLangButtons() {
+  document.querySelectorAll(".lang-btn").forEach(btn => {
+    const isEs = btn.id.toLowerCase().includes("es");
+    const isVi = btn.id.toLowerCase().includes("vi");
+    btn.classList.toggle("active", (isEs && currentLanguage === "es") || (isVi && currentLanguage === "vi"));
+  });
 }
 
 function applyStaticTranslations() {
   document.documentElement.lang = t("htmlLang");
   document.title = t("title");
-  document.querySelector(".language-switch")?.setAttribute("aria-label", t("installGroupLabel"));
-  setTextById("heroEyebrow", t("heroEyebrow"));
+
   setTextById("heroSubtitle", t("heroSubtitle"));
-  installBtn.textContent = t("installBtn");
-  setTextById("loginEyebrow", t("loginEyebrow"));
   setTextById("loginTitle", t("loginTitle"));
   setTextById("loginText", t("loginText"));
   setTextById("codeLabel", t("codeLabel"));
   setTextById("passwordLabel", t("passwordLabel"));
   passwordInput.placeholder = t("passwordPlaceholder");
   loginBtn.textContent = t("loginBtn");
+  installBtn.textContent = t("installBtn");
 
   setTextById("dashboardEyebrow", t("dashboardEyebrow"));
+  setTextById("totalRewardLabel", t("totalRewardLabel"));
   setTextById("todayTotalLabel", t("todayTotalLabel"));
   setTextById("cumulativeTotalLabel", t("cumulativeTotalLabel"));
-  setTextById("totalRewardLabel", t("totalRewardLabel"));
   setTextById("achievedRewardLabel", t("achievedRewardLabel"));
   setTextById("nextRewardLabel", t("nextRewardLabel"));
   setTextById("levelSectionTitle", t("levelSectionTitle"));
@@ -576,20 +558,18 @@ function applyStaticTranslations() {
   setTextById("categorySectionTitle", t("categorySectionTitle"));
   setTextById("historySectionTitle", t("historySectionTitle"));
   setTextById("historySectionText", t("historySectionText"));
-  refreshBtn.textContent = t("refreshBtn");
-  logoutBtn.textContent = t("logoutBtn");
+  setTextById("refreshBtnText", t("refreshBtn"));
+  setTextById("logoutBtnText", t("logoutBtn"));
+  setTextById("pullText", t("pullRefresh"));
 
   setTextById("adminEyebrow", t("adminEyebrow"));
   setTextById("adminTotalRewardLabel", t("adminTotalRewardLabel"));
   setTextById("adminStoresCountLabel", t("adminStoresCountLabel"));
   setTextById("adminTodayTotalLabel", t("adminTodayTotalLabel"));
   setTextById("adminCumulativeTotalLabel", t("adminCumulativeTotalLabel"));
-  setTextById("adminTabTotalBtn", t("adminTabTotal"));
-  setTextById("adminTabStoreBtn", t("adminTabStore"));
   setTextById("adminStoreSectionTitle", t("adminStoreSectionTitle"));
   setTextById("adminStoreSectionText", t("adminStoreSectionText"));
   setTextById("storeSearchLabel", t("storeSearchLabel"));
-  storeSearchInput.placeholder = t("storeSearchPlaceholder");
   setTextById("storeSelectorLabel", t("storeSelectorLabel"));
   setTextById("adminAggregateCategoryTitle", t("adminAggregateCategoryTitle"));
   setTextById("adminAggregateCategoryText", t("adminAggregateCategoryText"));
@@ -597,21 +577,38 @@ function applyStaticTranslations() {
   setTextById("adminAggregateLevelText", t("adminAggregateLevelText"));
   setTextById("adminStoresTableTitle", t("adminStoresTableTitle"));
   setTextById("adminStoresTableText", t("adminStoresTableText"));
-  setTextById("adminPageSizeLabel", t("adminPageSizeLabel"));
+  setTextById("adminRefreshBtnText", t("refreshBtn"));
+  setTextById("exportBtnText", t("exportBtn"));
+  setTextById("adminLogoutBtnText", t("logoutBtn"));
+  adminPrevPageBtn.textContent = t("paginationPrev");
+  adminNextPageBtn.textContent = t("paginationNext");
+
   setTextById("adminTableHeadCode", t("tableCode"));
   setTextById("adminTableHeadName", t("tableName"));
   setTextById("adminTableHeadArea", t("tableArea"));
   setTextById("adminTableHeadReward", t("tableReward"));
   setTextById("adminTableHeadProgress", t("tableProgress"));
   setTextById("adminTableHeadLevel", t("tableLevel"));
-  adminPrevPageBtn.textContent = t("paginationPrev");
-  adminNextPageBtn.textContent = t("paginationNext");
-  adminRefreshBtn.textContent = t("refreshBtn");
-  adminLogoutBtn.textContent = t("logoutBtn");
-  exportBtn.textContent = t("exportBtn");
 
-  langEsBtn.classList.toggle("lang-btn-active", currentLanguage === "es");
-  langViBtn.classList.toggle("lang-btn-active", currentLanguage === "vi");
+  // Nav labels
+  setTextById("navStoreHome", t("navHome"));
+  setTextById("navStoreLevels", t("navLevels"));
+  setTextById("navStoreLines", t("navLines"));
+  setTextById("navStoreMore", t("navMore"));
+  setTextById("navAdminOverview", t("navOverview"));
+  setTextById("navAdminStores", t("navStores"));
+  setTextById("navAdminMore", t("navMore"));
+
+  // More panel
+  setTextById("moreLangGroupTitle", t("moreLangTitle"));
+  setTextById("moreLangLabel", t("moreLangLabel"));
+  setTextById("moreActionsTitle", t("moreActionsTitle"));
+  setTextById("moreInstallText", t("moreInstall"));
+  setTextById("adminMoreLangTitle", t("moreLangTitle"));
+  setTextById("adminMoreLangLabel", t("moreLangLabel"));
+  setTextById("adminMoreActionsTitle", t("moreActionsTitle"));
+
+  syncAllLangButtons();
 
   if (!latestDashboard) {
     todayTotal.textContent = formatCount(0);
@@ -619,275 +616,221 @@ function applyStaticTranslations() {
     achievedReward.textContent = t("achievedRewardEmpty");
     achievedLevel.textContent = t("achievedRewardEmptyNote");
   }
-
   if (!latestAdminDashboard) {
-    adminName.textContent = t("defaultAdminName");
+    adminNameEl.textContent = t("defaultAdminName");
     adminTotalReward.textContent = formatCurrency(0);
-    adminStoresCount.textContent = formatNumber(0);
+    adminStoresCount.textContent = "0";
     adminTodayTotal.textContent = formatCount(0);
     adminCumulativeTotal.textContent = formatCount(0);
   }
 }
 
-function setAdminTab(tab) {
-  activeAdminTab = tab;
-  adminTabTotalBtn.classList.toggle("admin-menu-btn-active", tab === "total");
-  adminTabStoreBtn.classList.toggle("admin-menu-btn-active", tab === "store");
-  adminTotalView.classList.toggle("hidden", tab !== "total");
-  adminStoreView.classList.toggle("hidden", tab !== "store");
-}
-
-function setLanguage(language) {
-  currentLanguage = language;
-  localStorage.setItem(languageKey, language);
+function setLanguage(lang) {
+  currentLanguage = lang;
+  localStorage.setItem(languageKey, lang);
   applyStaticTranslations();
-
-  if (latestDashboard) {
-    renderStoreDashboard(latestDashboard);
-  }
-  if (latestAdminDashboard) {
-    renderAdminDashboard(latestAdminDashboard);
-  }
+  if (latestDashboard) renderStoreDashboard(latestDashboard);
+  if (latestAdminDashboard) renderAdminDashboard(latestAdminDashboard);
 }
 
-function buildCategoryCard(category) {
+/* ---------- 10. Card Builders ---------- */
+function buildLevelCard(level, index = 0) {
   const card = document.createElement("article");
-  card.className = "category-card";
-  if (category.reached) {
-    card.classList.add("category-card-reached");
-  }
+  card.className = `level-card${level.reached ? " is-reached" : ""}`;
+  card.style.animationDelay = `${index * 0.06}s`;
 
-  card.innerHTML = `
-    <div class="category-head">
-      <div>
-        <span class="category-label">${getCategoryLabel(category.id, category.label)}</span>
-        <strong>${formatCount(category.cumulative)}</strong>
+  const reqs = level.requirements.map(r => `
+    <div class="req-chip${r.reached ? " is-reached" : ""}">
+      <div class="req-top">
+        <span class="req-name">${getShortLabel(r.id, r.shortLabel)}</span>
+        <span class="req-pct">${r.reached ? t("requirementDone") : formatPercent(r.progress)}</span>
       </div>
-      <div class="category-reward-box">
-        <span>${t("categoryRewardLabel")}</span>
-        <strong class="category-reward-amount">${category.reward > 0 ? formatCurrency(category.reward) : "S/ 0"}</strong>
-      </div>
+      <span class="req-val">${formatCount(r.actual)} / ${formatCount(r.target)}</span>
+      <div class="req-bar"><div class="req-bar-fill" style="width:0%"></div></div>
     </div>
-    <div class="category-status-row">
-      <span class="category-badge">${category.reached ? t("categoryReached") : t("categoryNotReached", { progress: formatPercent(category.progress) })}</span>
-    </div>
-    <div class="stats-grid">
-      <div class="stat-chip">
-        <span>${t("statToday")}</span>
-        <strong>${formatCount(category.daily)}</strong>
-      </div>
-      <div class="stat-chip">
-        <span>${t("statTarget")}</span>
-        <strong>${formatCount(category.target)}</strong>
-      </div>
-      <div class="stat-chip">
-        <span>${t("statCumulative")}</span>
-        <strong>${formatCount(category.cumulative)}</strong>
-      </div>
-      <div class="stat-chip">
-        <span>${t("statRemaining")}</span>
-        <strong>${formatCount(category.remaining)}</strong>
-      </div>
-    </div>
-    <div class="progress-track">
-      <div class="progress-fill" style="width: 0%"></div>
-    </div>
-    <p class="category-foot">${category.reached ? t("categoryFootDone", { reward: formatCurrency(category.reward) }) : t("categoryFootPending", { remaining: formatCount(category.remaining) })}</p>
-  `;
-
-  requestAnimationFrame(() => {
-    const fill = card.querySelector(".progress-fill");
-    fill.style.width = `${Math.max(0, Math.min(100, category.progress))}%`;
-  });
-
-  return card;
-}
-
-function buildAggregateCategoryCard(category) {
-  const card = document.createElement("article");
-  card.className = "category-card";
-  if (category.reachedStores > 0) {
-    card.classList.add("category-card-reached");
-  }
-
-  card.innerHTML = `
-    <div class="category-head">
-      <div>
-        <span class="category-label">${getCategoryLabel(category.id, category.label)}</span>
-        <strong>${formatCount(category.cumulative)}</strong>
-      </div>
-      <div class="category-reward-box">
-        <span>${t("categoryRewardLabel")}</span>
-        <strong class="category-reward-amount">${formatCurrency(category.rewardEarned)}</strong>
-      </div>
-    </div>
-    <div class="category-status-row">
-      <span class="category-badge">${t("adminAggregateReachedStores", { count: category.reachedStores })}</span>
-    </div>
-    <div class="stats-grid">
-      <div class="stat-chip">
-        <span>${t("statToday")}</span>
-        <strong>${formatCount(category.daily)}</strong>
-      </div>
-      <div class="stat-chip">
-        <span>${t("statTarget")}</span>
-        <strong>${formatCount(category.target)}</strong>
-      </div>
-      <div class="stat-chip">
-        <span>${t("statCumulative")}</span>
-        <strong>${formatCount(category.cumulative)}</strong>
-      </div>
-      <div class="stat-chip">
-        <span>${t("statRemaining")}</span>
-        <strong>${formatCount(category.remaining)}</strong>
-      </div>
-    </div>
-    <div class="progress-track">
-      <div class="progress-fill" style="width: 0%"></div>
-    </div>
-    <p class="category-foot">${t("categoryFootPending", { remaining: formatCount(category.remaining) })}</p>
-  `;
-
-  requestAnimationFrame(() => {
-    const fill = card.querySelector(".progress-fill");
-    fill.style.width = `${Math.max(0, Math.min(100, category.progress))}%`;
-  });
-
-  return card;
-}
-
-function buildLevelCard(level) {
-  const card = document.createElement("article");
-  card.className = "level-card";
-  if (level.reached) {
-    card.classList.add("level-card-reached");
-  }
-
-  const requirements = level.requirements
-    .map(
-      (item) => `
-        <div class="requirement-chip ${item.reached ? "requirement-chip-reached" : ""}">
-          <div class="requirement-head">
-            <span>${getShortLabel(item.id, item.shortLabel)}</span>
-            <em>${item.reached ? t("requirementDone") : formatPercent(item.progress)}</em>
-          </div>
-          <strong>${formatCount(item.actual)} / ${formatCount(item.target)}</strong>
-          <div class="requirement-progress">
-            <div class="requirement-progress-fill" style="width: ${Math.max(0, Math.min(100, item.progress))}%"></div>
-          </div>
-        </div>
-      `
-    )
-    .join("");
+  `).join("");
 
   card.innerHTML = `
     <div class="level-head">
-      <div>
-        <span class="level-label">${getLevelLabel(level.label)}</span>
-        <strong>${formatCurrency(level.reward)}</strong>
+      <div class="level-info">
+        <span class="level-name">${getLevelLabel(level.label)}</span>
+        <strong class="level-reward">${formatCurrency(level.reward)}</strong>
       </div>
       <span class="level-badge">${level.reached ? t("levelDone") : t("levelNotDone", { progress: formatPercent(level.progress) })}</span>
     </div>
-    <div class="requirement-grid">${requirements}</div>
-    <div class="progress-track">
-      <div class="progress-fill" style="width: 0%"></div>
-    </div>
+    <div class="req-grid">${reqs}</div>
+    <div class="level-progress"><div class="level-progress-fill" style="width:0%"></div></div>
     <p class="level-foot">${level.reached ? t("levelFootDone", { label: getLevelLabel(level.label), reward: formatCurrency(level.reward) }) : t("levelFootPending")}</p>
   `;
 
   requestAnimationFrame(() => {
-    const fill = card.querySelector(".progress-fill");
-    fill.style.width = `${Math.max(0, Math.min(100, level.progress))}%`;
+    card.querySelector(".level-progress-fill").style.width = `${Math.min(100, level.progress)}%`;
+    card.querySelectorAll(".req-bar-fill").forEach((fill, i) => {
+      fill.style.width = `${Math.min(100, level.requirements[i]?.progress || 0)}%`;
+    });
   });
 
   return card;
 }
 
-function buildAggregateLevelCard(level) {
+function buildCategoryCard(cat, index = 0) {
   const card = document.createElement("article");
-  card.className = "level-card";
-  if (level.reachedStores > 0) {
-    card.classList.add("level-card-reached");
-  }
+  card.className = `cat-card${cat.reached ? " is-reached" : ""}`;
+  card.style.animationDelay = `${index * 0.06}s`;
 
-  const requirements = level.requirements
-    .map(
-      (item) => `
-        <div class="requirement-chip ${item.reached ? "requirement-chip-reached" : ""}">
-          <div class="requirement-head">
-            <span>${getShortLabel(item.id, item.shortLabel)}</span>
-            <em>${formatPercent(item.progress)}</em>
-          </div>
-          <strong>${formatCount(item.actual)} / ${formatCount(item.target)}</strong>
-          <div class="requirement-progress">
-            <div class="requirement-progress-fill" style="width: ${Math.max(0, Math.min(100, item.progress))}%"></div>
-          </div>
-        </div>
-      `
-    )
-    .join("");
+  card.innerHTML = `
+    <div class="cat-head">
+      <div class="cat-info">
+        <span class="cat-name">${getCategoryLabel(cat.id, cat.label)}</span>
+        <strong class="cat-cumulative">${formatCount(cat.cumulative)}</strong>
+      </div>
+      <div class="cat-reward-box">
+        <span class="cat-reward-label">${t("categoryRewardLabel")}</span>
+        <strong class="cat-reward-amount">${cat.reward > 0 ? formatCurrency(cat.reward) : "S/ 0"}</strong>
+      </div>
+    </div>
+    <div class="cat-badge-row">
+      <span class="cat-badge">${cat.reached ? t("categoryReached") : t("categoryNotReached", { progress: formatPercent(cat.progress) })}</span>
+    </div>
+    <div class="cat-stats">
+      <div class="cat-stat"><span class="cs-label">${t("statToday")}</span><strong class="cs-value">${formatNumber(cat.daily)}</strong></div>
+      <div class="cat-stat"><span class="cs-label">${t("statTarget")}</span><strong class="cs-value">${formatNumber(cat.target)}</strong></div>
+      <div class="cat-stat"><span class="cs-label">${t("statCumulative")}</span><strong class="cs-value">${formatNumber(cat.cumulative)}</strong></div>
+      <div class="cat-stat"><span class="cs-label">${t("statRemaining")}</span><strong class="cs-value">${formatNumber(cat.remaining)}</strong></div>
+    </div>
+    <div class="cat-progress"><div class="cat-progress-fill" style="width:0%"></div></div>
+    <p class="cat-foot">${cat.reached ? t("categoryFootDone", { reward: formatCurrency(cat.reward) }) : t("categoryFootPending", { remaining: formatCount(cat.remaining) })}</p>
+  `;
+
+  requestAnimationFrame(() => {
+    card.querySelector(".cat-progress-fill").style.width = `${Math.min(100, cat.progress)}%`;
+  });
+
+  return card;
+}
+
+function buildAggregateCategoryCard(cat, index = 0) {
+  const card = document.createElement("article");
+  card.className = `cat-card${cat.reachedStores > 0 ? " is-reached" : ""}`;
+  card.style.animationDelay = `${index * 0.06}s`;
+
+  card.innerHTML = `
+    <div class="cat-head">
+      <div class="cat-info">
+        <span class="cat-name">${getCategoryLabel(cat.id, cat.label)}</span>
+        <strong class="cat-cumulative">${formatCount(cat.cumulative)}</strong>
+      </div>
+      <div class="cat-reward-box">
+        <span class="cat-reward-label">${t("categoryRewardLabel")}</span>
+        <strong class="cat-reward-amount">${formatCurrency(cat.rewardEarned)}</strong>
+      </div>
+    </div>
+    <div class="cat-badge-row">
+      <span class="cat-badge">${t("adminAggregateReachedStores", { count: cat.reachedStores })}</span>
+    </div>
+    <div class="cat-stats">
+      <div class="cat-stat"><span class="cs-label">${t("statToday")}</span><strong class="cs-value">${formatNumber(cat.daily)}</strong></div>
+      <div class="cat-stat"><span class="cs-label">${t("statTarget")}</span><strong class="cs-value">${formatNumber(cat.target)}</strong></div>
+      <div class="cat-stat"><span class="cs-label">${t("statCumulative")}</span><strong class="cs-value">${formatNumber(cat.cumulative)}</strong></div>
+      <div class="cat-stat"><span class="cs-label">${t("statRemaining")}</span><strong class="cs-value">${formatNumber(cat.remaining)}</strong></div>
+    </div>
+    <div class="cat-progress"><div class="cat-progress-fill" style="width:0%"></div></div>
+    <p class="cat-foot">${t("categoryFootPending", { remaining: formatCount(cat.remaining) })}</p>
+  `;
+
+  requestAnimationFrame(() => {
+    card.querySelector(".cat-progress-fill").style.width = `${Math.min(100, cat.progress)}%`;
+  });
+
+  return card;
+}
+
+function buildAggregateLevelCard(level, index = 0) {
+  const card = document.createElement("article");
+  card.className = `level-card${level.reachedStores > 0 ? " is-reached" : ""}`;
+  card.style.animationDelay = `${index * 0.06}s`;
+
+  const reqs = level.requirements.map(r => `
+    <div class="req-chip${r.reached ? " is-reached" : ""}">
+      <div class="req-top">
+        <span class="req-name">${getShortLabel(r.id, r.shortLabel)}</span>
+        <span class="req-pct">${formatPercent(r.progress)}</span>
+      </div>
+      <span class="req-val">${formatCount(r.actual)} / ${formatCount(r.target)}</span>
+      <div class="req-bar"><div class="req-bar-fill" style="width:0%"></div></div>
+    </div>
+  `).join("");
 
   card.innerHTML = `
     <div class="level-head">
-      <div>
-        <span class="level-label">${getLevelLabel(level.label)}</span>
-        <strong>${formatCurrency(level.rewardEarned)}</strong>
+      <div class="level-info">
+        <span class="level-name">${getLevelLabel(level.label)}</span>
+        <strong class="level-reward">${formatCurrency(level.rewardEarned)}</strong>
       </div>
       <span class="level-badge">${formatPercent(level.progress)}</span>
     </div>
-    <div class="requirement-grid">${requirements}</div>
-    <div class="progress-track">
-      <div class="progress-fill" style="width: 0%"></div>
-    </div>
+    <div class="req-grid">${reqs}</div>
+    <div class="level-progress"><div class="level-progress-fill" style="width:0%"></div></div>
     <p class="level-foot">${t("adminAggregateLevelFoot", { reached: level.reachedStores, total: level.storesWithLevel })}</p>
   `;
 
   requestAnimationFrame(() => {
-    const fill = card.querySelector(".progress-fill");
-    fill.style.width = `${Math.max(0, Math.min(100, level.progress))}%`;
+    card.querySelector(".level-progress-fill").style.width = `${Math.min(100, level.progress)}%`;
+    card.querySelectorAll(".req-bar-fill").forEach((fill, i) => {
+      fill.style.width = `${Math.min(100, level.requirements[i]?.progress || 0)}%`;
+    });
   });
 
   return card;
 }
 
+/* ---------- 11. History Chart ---------- */
 function renderHistory(container, history, todayKey) {
   container.innerHTML = "";
-
   if (!history.length) {
-    container.innerHTML = `<div class="empty-state">${t("historyEmpty")}</div>`;
+    container.innerHTML = `<div class="history-empty">${t("historyEmpty")}</div>`;
+    container.style.minHeight = "60px";
     return;
   }
 
-  const maxValue = Math.max(...history.map((entry) => entry.total), 1);
+  container.style.minHeight = "";
+  const maxVal = Math.max(...history.map(e => e.total), 1);
 
-  history.forEach((entry) => {
-    const item = document.createElement("article");
-    item.className = "history-card";
-    if (entry.date === todayKey) {
-      item.classList.add("history-card-today");
-    }
+  history.forEach((entry, i) => {
+    const bar = document.createElement("div");
+    bar.className = `history-bar${entry.date === todayKey ? " is-today" : ""}`;
+    const pct = Math.max(6, (entry.total / maxVal) * 100);
 
-    const height = Math.max(12, (entry.total / maxValue) * 100);
-    const breakdown = entry.breakdown
-      .map((part) => `${getShortLabel(part.id, part.shortLabel)}: ${formatNumber(part.value)}`)
-      .join(" • ");
-
-    item.innerHTML = `
-      <span class="history-value">${formatCount(entry.total)}</span>
-      <div class="history-bar-wrap">
-        <div class="history-bar" style="height: ${height}%"></div>
-      </div>
-      <strong>${new Intl.DateTimeFormat(getLocale(), { day: "2-digit", month: "2-digit" }).format(new Date(`${entry.date}T00:00:00`))}</strong>
-      <p class="history-meta">${breakdown}</p>
+    bar.innerHTML = `
+      <span class="hb-value">${formatNumber(entry.total)}</span>
+      <div class="hb-track"><div class="hb-fill" style="height:0%"></div></div>
+      <span class="hb-date">${new Intl.DateTimeFormat(getLocale(), { day: "2-digit", month: "2-digit" }).format(new Date(`${entry.date}T00:00:00`))}</span>
     `;
-    container.appendChild(item);
+
+    container.appendChild(bar);
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        bar.querySelector(".hb-fill").style.height = `${pct}%`;
+      }, i * 80);
+    });
   });
 }
 
+/* ---------- 12. Store Dashboard Renderer ---------- */
 function renderStoreDashboard(data) {
   latestDashboard = data;
   storeName.textContent = data.store.name || t("defaultStoreName");
   storeMeta.textContent = [data.store.code, data.store.area].filter(Boolean).join(" • ");
+
+  totalReward.textContent = formatCurrency(data.rewardSummary.total);
+  const [year, month] = (data.rewardSummary.monthKey || "").split("-");
+  totalRewardMeta.textContent = t("totalRewardMeta", {
+    levelReward: formatCurrency(data.rewardSummary.levelReward),
+    categoryRewardTotal: formatCurrency(data.rewardSummary.categoryRewardTotal),
+    monthLabel: t("monthLabel", { month, year })
+  });
+
   todayTotal.textContent = formatCount(data.today.total);
   todayDate.textContent = `${t("todayDatePrefix")} ${formatDisplayDate(data.today.date)}`;
   cumulativeTotal.textContent = formatCount(data.cumulative.total);
@@ -896,189 +839,156 @@ function renderStoreDashboard(data) {
     progress: formatPercent(data.cumulative.progress)
   });
 
-  const [year, month] = (data.rewardSummary.monthKey || "").split("-");
-  totalReward.textContent = formatCurrency(data.rewardSummary.total);
-  totalRewardMeta.textContent = t("totalRewardMeta", {
-    levelReward: formatCurrency(data.rewardSummary.levelReward),
-    categoryRewardTotal: formatCurrency(data.rewardSummary.categoryRewardTotal),
-    monthLabel: t("monthLabel", { month, year })
-  });
-
   if (data.achievements.achievedLevel) {
     achievedReward.textContent = formatCurrency(data.achievements.achievedLevel.reward);
-    achievedLevel.textContent = t("achievedLevelDone", {
-      label: getLevelLabel(data.achievements.achievedLevel.label)
-    });
+    achievedLevel.textContent = t("achievedLevelDone", { label: getLevelLabel(data.achievements.achievedLevel.label) });
+    achCardReached.classList.add("is-achieved");
   } else {
     achievedReward.textContent = t("achievedRewardEmpty");
     achievedLevel.textContent = t("achievedRewardEmptyNote");
+    achCardReached.classList.remove("is-achieved");
   }
 
   if (data.achievements.nextLevel) {
     nextReward.textContent = formatCurrency(data.achievements.nextLevel.reward);
     const missing = data.achievements.nextLevel.missingRequirements
       .slice(0, 2)
-      .map((item) => `${getShortLabel(item.id, item.shortLabel)} ${currentLanguage === "es" ? "falta" : "còn"} ${formatCount(item.remaining)}`)
+      .map(m => `${getShortLabel(m.id, m.shortLabel)} ${currentLanguage === "es" ? "falta" : "còn"} ${formatCount(m.remaining)}`)
       .join(" • ");
-    nextLevel.textContent = missing
-      ? t("nextLevelMissing", { label: getLevelLabel(data.achievements.nextLevel.label), missing })
-      : t("nextLevelWaiting", { label: getLevelLabel(data.achievements.nextLevel.label) });
+    nextLevel.textContent = missing ? t("nextLevelMissing", { label: getLevelLabel(data.achievements.nextLevel.label), missing }) : t("nextLevelWaiting", { label: getLevelLabel(data.achievements.nextLevel.label) });
   } else {
     nextReward.textContent = "S/ 0";
     nextLevel.textContent = t("nextLevelMax");
   }
 
   updatedAt.textContent = t("updatedAt", { value: formatTimestamp(data.updatedAt) });
+
   levelsGrid.innerHTML = "";
-  data.levels.forEach((level) => levelsGrid.appendChild(buildLevelCard(level)));
+  data.levels.forEach((lv, i) => levelsGrid.appendChild(buildLevelCard(lv, i)));
+
   categoriesGrid.innerHTML = "";
-  data.categories.forEach((category) => categoriesGrid.appendChild(buildCategoryCard(category)));
+  data.categories.forEach((cat, i) => categoriesGrid.appendChild(buildCategoryCard(cat, i)));
+
   renderHistory(historyGrid, data.history, data.today.date);
-  setStatus(dashboardStatus, t("dashboardSynced"));
 }
 
-function createStoreDetailView(storeDashboard) {
-  const wrapper = document.createElement("div");
-  wrapper.className = "admin-detail-stack";
-  const [year, month] = (storeDashboard.rewardSummary.monthKey || "").split("-");
+/* ---------- 13. Admin Dashboard Renderer ---------- */
+function createStoreDetailView(sd) {
+  const w = document.createElement("div");
+  w.className = "admin-detail-stack";
+  const [yr, mo] = (sd.rewardSummary.monthKey || "").split("-");
 
-  wrapper.innerHTML = `
-    <div class="section-head">
-      <div>
-        <h3>${t("adminStoreDetailTitle", { name: storeDashboard.store.name, code: storeDashboard.store.code })}</h3>
-        <p class="panel-text">${t("adminStoreDetailMeta", { area: storeDashboard.store.area })}</p>
-      </div>
+  w.innerHTML = `
+    <div class="section-block">
+      <h3 class="section-title">${t("adminStoreDetailTitle", { name: sd.store.name, code: sd.store.code })}</h3>
+      <p class="section-text">${t("adminStoreDetailMeta", { area: sd.store.area })}</p>
     </div>
-    <div class="summary-grid admin-detail-summary">
-      <article class="summary-card summary-card-main">
-        <span>${t("totalRewardLabel")}</span>
-        <strong>${formatCurrency(storeDashboard.rewardSummary.total)}</strong>
-        <p class="summary-note">${t("totalRewardMeta", {
-          levelReward: formatCurrency(storeDashboard.rewardSummary.levelReward),
-          categoryRewardTotal: formatCurrency(storeDashboard.rewardSummary.categoryRewardTotal),
-          monthLabel: t("monthLabel", { month, year })
-        })}</p>
-      </article>
-      <article class="summary-card summary-card-reward">
-        <span>${t("todayTotalLabel")}</span>
-        <strong>${formatCount(storeDashboard.today.total)}</strong>
-        <p class="summary-note">${t("todayDatePrefix")} ${formatDisplayDate(storeDashboard.today.date)}</p>
-      </article>
-      <article class="summary-card">
-        <span>${t("cumulativeTotalLabel")}</span>
-        <strong>${formatCount(storeDashboard.cumulative.total)}</strong>
-        <p class="summary-note">${t("cumulativeMeta", {
-          target: formatCount(storeDashboard.cumulative.target),
-          progress: formatPercent(storeDashboard.cumulative.progress)
-        })}</p>
-      </article>
-      <article class="summary-card">
-        <span>${t("achievedRewardLabel")}</span>
-        <strong>${storeDashboard.achievements.achievedLevel ? formatCurrency(storeDashboard.achievements.achievedLevel.reward) : t("achievedRewardEmpty")}</strong>
-        <p class="summary-note">${storeDashboard.achievements.achievedLevel ? t("achievedLevelDone", { label: getLevelLabel(storeDashboard.achievements.achievedLevel.label) }) : t("achievedRewardEmptyNote")}</p>
-      </article>
+    <div class="admin-summary">
+      <div class="admin-stat is-hero">
+        <span class="as-label">${t("totalRewardLabel")}</span>
+        <strong class="as-value">${formatCurrency(sd.rewardSummary.total)}</strong>
+        <p class="as-meta">${t("totalRewardMeta", { levelReward: formatCurrency(sd.rewardSummary.levelReward), categoryRewardTotal: formatCurrency(sd.rewardSummary.categoryRewardTotal), monthLabel: t("monthLabel", { month: mo, year: yr }) })}</p>
+      </div>
+      <div class="admin-stat">
+        <span class="as-label">${t("todayTotalLabel")}</span>
+        <strong class="as-value">${formatCount(sd.today.total)}</strong>
+      </div>
+      <div class="admin-stat">
+        <span class="as-label">${t("cumulativeTotalLabel")}</span>
+        <strong class="as-value">${formatCount(sd.cumulative.total)}</strong>
+        <p class="as-meta">${t("cumulativeMeta", { target: formatCount(sd.cumulative.target), progress: formatPercent(sd.cumulative.progress) })}</p>
+      </div>
+      <div class="admin-stat">
+        <span class="as-label">${t("achievedRewardLabel")}</span>
+        <strong class="as-value">${sd.achievements.achievedLevel ? formatCurrency(sd.achievements.achievedLevel.reward) : t("achievedRewardEmpty")}</strong>
+      </div>
     </div>
   `;
 
-  const levelsSection = document.createElement("section");
-  levelsSection.className = "detail-section";
-  levelsSection.innerHTML = `<div class="section-head"><h3>${t("levelSectionTitle")}</h3><p class="panel-text">${t("levelSectionText")}</p></div>`;
-  const levelGrid = document.createElement("div");
-  levelGrid.className = "levels-grid";
-  storeDashboard.levels.forEach((level) => levelGrid.appendChild(buildLevelCard(level)));
-  levelsSection.appendChild(levelGrid);
+  const levSec = document.createElement("div");
+  levSec.innerHTML = `<div class="section-block mt-md"><h3 class="section-title">${t("levelSectionTitle")}</h3></div>`;
+  const levGrid = document.createElement("div");
+  levGrid.className = "levels-list";
+  sd.levels.forEach((lv, i) => levGrid.appendChild(buildLevelCard(lv, i)));
+  levSec.appendChild(levGrid);
 
-  const categoriesSection = document.createElement("section");
-  categoriesSection.className = "detail-section";
-  categoriesSection.innerHTML = `<div class="section-head"><h3>${t("categorySectionTitle")}</h3><p class="panel-text">${t("updatedAt", { value: formatTimestamp(storeDashboard.updatedAt) })}</p></div>`;
-  const categoryGrid = document.createElement("div");
-  categoryGrid.className = "categories-grid";
-  storeDashboard.categories.forEach((category) => categoryGrid.appendChild(buildCategoryCard(category)));
-  categoriesSection.appendChild(categoryGrid);
+  const catSec = document.createElement("div");
+  catSec.innerHTML = `<div class="section-block mt-md"><h3 class="section-title">${t("categorySectionTitle")}</h3></div>`;
+  const catGrid = document.createElement("div");
+  catGrid.className = "categories-list";
+  sd.categories.forEach((cat, i) => catGrid.appendChild(buildCategoryCard(cat, i)));
+  catSec.appendChild(catGrid);
 
-  const historySection = document.createElement("section");
-  historySection.className = "detail-section";
-  historySection.innerHTML = `<div class="section-head"><h3>${t("historySectionTitle")}</h3><p class="panel-text">${t("historySectionText")}</p></div>`;
-  const detailHistory = document.createElement("div");
-  detailHistory.className = "history-grid";
-  renderHistory(detailHistory, storeDashboard.history, storeDashboard.today.date);
-  historySection.appendChild(detailHistory);
+  const histSec = document.createElement("div");
+  histSec.innerHTML = `<div class="section-block mt-md"><h3 class="section-title">${t("historySectionTitle")}</h3></div>`;
+  const histChart = document.createElement("div");
+  histChart.className = "history-chart";
+  renderHistory(histChart, sd.history, sd.today.date);
+  histSec.appendChild(histChart);
 
-  wrapper.appendChild(levelsSection);
-  wrapper.appendChild(categoriesSection);
-  wrapper.appendChild(historySection);
-  return wrapper;
-}
-
-function populateStoreSelector(items) {
-  const currentValue = items.some((item) => item.code === selectedAdminStoreCode)
-    ? selectedAdminStoreCode
-    : items[0]?.code || "";
-  storeSelector.innerHTML = "";
-
-  items.forEach((store) => {
-    const option = document.createElement("option");
-    option.value = store.code;
-    option.textContent = `${store.code} • ${store.name}`;
-    if (store.code === currentValue) {
-      option.selected = true;
-    }
-    storeSelector.appendChild(option);
-  });
-
-  selectedAdminStoreCode = currentValue;
+  w.appendChild(levSec);
+  w.appendChild(catSec);
+  w.appendChild(histSec);
+  return w;
 }
 
 function renderAdminTable(storesPage) {
   adminStoresTableBody.innerHTML = "";
-
   if (!storesPage?.items?.length) {
-    adminStoresTableBody.innerHTML = `<tr><td colspan="6">${t("adminNoStores")}</td></tr>`;
+    adminStoresTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px">${t("adminNoStores")}</td></tr>`;
     adminPaginationInfo.textContent = "";
     adminPrevPageBtn.disabled = true;
     adminNextPageBtn.disabled = true;
     return;
   }
-
-  storesPage.items.forEach((store) => {
+  storesPage.items.forEach(s => {
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td>${store.code}</td>
-      <td>${store.name}</td>
-      <td>${store.area || ""}</td>
-      <td>${formatCurrency(store.totalReward)}</td>
-      <td>${formatPercent(store.cumulativeProgress)}</td>
-      <td>${store.achievedLevel ? getLevelLabel(store.achievedLevel.label) : "-"}</td>
+      <td>${s.code}</td>
+      <td>${s.name}</td>
+      <td>${s.area || ""}</td>
+      <td>${formatCurrency(s.totalReward)}</td>
+      <td>${formatPercent(s.cumulativeProgress)}</td>
+      <td>${s.achievedLevel ? getLevelLabel(s.achievedLevel.label) : "-"}</td>
     `;
     adminStoresTableBody.appendChild(row);
   });
 
-  const { page, pageSize, totalItems, totalPages, startIndex } = storesPage.pagination;
+  const { page, pageSize: ps, totalItems, totalPages, startIndex } = storesPage.pagination;
   const start = totalItems ? startIndex + 1 : 0;
-  const end = Math.min(startIndex + pageSize, totalItems);
-  adminPaginationInfo.textContent = t("paginationInfo", {
-    start,
-    end,
-    total: totalItems,
-    page,
-    pages: totalPages
-  });
+  const end = Math.min(startIndex + ps, totalItems);
+  adminPaginationInfo.textContent = t("paginationInfo", { start, end, total: totalItems, page, pages: totalPages });
   adminPrevPageBtn.disabled = page <= 1;
   adminNextPageBtn.disabled = page >= totalPages;
 }
 
-function showAdminStorePrompt(message = t("adminStorePrompt")) {
-  adminStoreDetail.innerHTML = `<div class="empty-state">${message}</div>`;
+function populateStoreSelector(items) {
+  const curVal = items.some(i => i.code === selectedAdminStoreCode) ? selectedAdminStoreCode : (items[0]?.code || "");
+  storeSelector.innerHTML = "";
+  items.forEach(s => {
+    const opt = document.createElement("option");
+    opt.value = s.code;
+    opt.textContent = `${s.code} • ${s.name}`;
+    if (s.code === curVal) opt.selected = true;
+    storeSelector.appendChild(opt);
+  });
+  selectedAdminStoreCode = curVal;
+}
+
+function showAdminStorePromptMsg(msg) {
+  adminStoreDetail.innerHTML = `<div class="empty-state">${msg || t("adminStorePrompt")}</div>`;
 }
 
 function renderAdminDashboard(data) {
   latestAdminDashboard = data;
+
   if (data.storesPage?.pagination) {
     adminCurrentPage = data.storesPage.pagination.page;
     adminPageSize = data.storesPage.pagination.pageSize;
     adminPageSizeSelect.value = String(adminPageSize);
   }
-  adminName.textContent = data.admin.name || t("defaultAdminName");
+
+  adminNameEl.textContent = data.admin.name || t("defaultAdminName");
   adminMeta.textContent = [data.admin.username, t("updatedAt", { value: formatTimestamp(data.updatedAt) })].join(" • ");
 
   const [year, month] = (data.summary.monthKey || "").split("-");
@@ -1099,26 +1009,20 @@ function renderAdminDashboard(data) {
   });
 
   adminAggregateCategoriesGrid.innerHTML = "";
-  data.aggregateCategories.forEach((category) =>
-    adminAggregateCategoriesGrid.appendChild(buildAggregateCategoryCard(category))
-  );
+  data.aggregateCategories.forEach((cat, i) => adminAggregateCategoriesGrid.appendChild(buildAggregateCategoryCard(cat, i)));
 
   adminAggregateLevelsGrid.innerHTML = "";
-  data.aggregateLevels.forEach((level) =>
-    adminAggregateLevelsGrid.appendChild(buildAggregateLevelCard(level))
-  );
+  data.aggregateLevels.forEach((lv, i) => adminAggregateLevelsGrid.appendChild(buildAggregateLevelCard(lv, i)));
 
   renderAdminTable(data.storesPage);
-  if (!adminStoreQuery.trim()) {
-    showAdminStorePrompt();
-  }
-  setAdminTab(activeAdminTab);
-  setStatus(adminStatus, t("adminDashboardSynced"));
+
+  if (!adminStoreQuery.trim()) showAdminStorePromptMsg();
 }
 
+/* ---------- 14. API Functions ---------- */
 async function apiFetch(url, options = {}) {
   const token = getToken();
-  const response = await fetch(url, {
+  const resp = await fetch(url, {
     ...options,
     cache: options.cache || "no-store",
     headers: {
@@ -1127,18 +1031,14 @@ async function apiFetch(url, options = {}) {
       ...(options.headers || {})
     }
   });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(localizeServerMessage(data.error || t("unsupportedRequest")));
-  }
-
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(localizeServerMessage(data.error || t("unsupportedRequest")));
   return data;
 }
 
 async function apiBlobFetch(url, options = {}) {
   const token = getToken();
-  const response = await fetch(url, {
+  const resp = await fetch(url, {
     ...options,
     cache: "no-store",
     headers: {
@@ -1146,159 +1046,96 @@ async function apiBlobFetch(url, options = {}) {
       ...(options.headers || {})
     }
   });
-
-  if (!response.ok) {
-    let message = t("unsupportedRequest");
-    try {
-      const data = await response.json();
-      message = localizeServerMessage(data.error || message);
-    } catch (_error) {
-      // Ignore body parsing failure.
-    }
-    throw new Error(message);
+  if (!resp.ok) {
+    let msg = t("unsupportedRequest");
+    try { const d = await resp.json(); msg = localizeServerMessage(d.error || msg); } catch (_e) { /* ignore */ }
+    throw new Error(msg);
   }
-
-  return response.blob();
+  return resp.blob();
 }
 
+/* ---------- 15. Data Loading ---------- */
 async function loadStoreDashboard(forceRefresh = false) {
-  refreshBtn.disabled = true;
-  setStatus(dashboardStatus, t("dashboardLoading"));
-
   try {
     const url = forceRefresh ? `/api/dashboard?refresh=1&t=${Date.now()}` : "/api/dashboard";
-    const data = await apiFetch(url, { cache: "no-store" });
+    const data = await apiFetch(url);
     renderStoreDashboard(data);
-    setViewMode("store");
-  } catch (error) {
+    showStoreApp();
+    if (forceRefresh) showToast(t("dashboardSynced"), "success");
+  } catch (err) {
     clearSession();
     latestDashboard = null;
-    setViewMode("auth");
-    setStatus(authStatus, error.message || t("authInvalid"), true);
-  } finally {
-    refreshBtn.disabled = false;
+    showLogin();
+    showToast(err.message || t("authInvalid"), "error");
   }
 }
 
 async function loadAdminDashboard(forceRefresh = false) {
-  adminRefreshBtn.disabled = true;
-  exportBtn.disabled = true;
-  setStatus(adminStatus, t("adminDashboardLoading"));
-
   try {
-    const params = new URLSearchParams({
-      page: String(adminCurrentPage),
-      pageSize: String(adminPageSize)
-    });
-    if (forceRefresh) {
-      params.set("refresh", "1");
-      params.set("t", String(Date.now()));
-    }
-    const url = `/api/admin/dashboard?${params.toString()}`;
-    const data = await apiFetch(url, { cache: "no-store" });
+    const params = new URLSearchParams({ page: String(adminCurrentPage), pageSize: String(adminPageSize) });
+    if (forceRefresh) { params.set("refresh", "1"); params.set("t", String(Date.now())); }
+    const data = await apiFetch(`/api/admin/dashboard?${params}`);
     renderAdminDashboard(data);
-    setViewMode("admin");
-  } catch (error) {
+    showAdminApp();
+    if (forceRefresh) showToast(t("adminDashboardSynced"), "success");
+  } catch (err) {
     clearSession();
     latestAdminDashboard = null;
-    setViewMode("auth");
-    setStatus(authStatus, error.message || t("authInvalid"), true);
-  } finally {
-    adminRefreshBtn.disabled = false;
-    exportBtn.disabled = false;
+    showLogin();
+    showToast(err.message || t("authInvalid"), "error");
   }
 }
 
 async function loadAdminStoreDetail(code, forceRefresh = false) {
-  const normalizedCode = String(code || "")
-    .trim()
-    .toUpperCase();
-  if (!normalizedCode) {
-    showAdminStorePrompt();
-    return;
-  }
-
-  showAdminStorePrompt(t("adminStoreDetailLoading"));
+  const c = String(code || "").trim().toUpperCase();
+  if (!c) { showAdminStorePromptMsg(); return; }
+  showAdminStorePromptMsg(t("adminStoreDetailLoading"));
   try {
-    const params = new URLSearchParams({ code: normalizedCode });
-    if (forceRefresh) {
-      params.set("refresh", "1");
-      params.set("t", String(Date.now()));
-    }
-    const data = await apiFetch(`/api/admin/store?${params.toString()}`, {
-      cache: "no-store"
-    });
+    const params = new URLSearchParams({ code: c });
+    if (forceRefresh) { params.set("refresh", "1"); params.set("t", String(Date.now())); }
+    const data = await apiFetch(`/api/admin/store?${params}`);
     adminStoreDetail.innerHTML = "";
     adminStoreDetail.appendChild(createStoreDetailView(data));
-  } catch (error) {
-    showAdminStorePrompt(error.message || t("adminNoStoreMatch"));
+  } catch (err) {
+    showAdminStorePromptMsg(err.message || t("adminNoStoreMatch"));
   }
 }
 
 async function loadAdminStoreSearch(forceRefresh = false) {
-  const query = adminStoreQuery.trim().toUpperCase();
-  if (!query) {
-    selectedAdminStoreCode = "";
-    storeSelector.innerHTML = "";
-    showAdminStorePrompt();
-    return;
-  }
-
-  setStatus(adminStatus, t("adminStoreSearchLoading"));
-
+  const q = adminStoreQuery.trim().toUpperCase();
+  if (!q) { selectedAdminStoreCode = ""; storeSelector.innerHTML = ""; showAdminStorePromptMsg(); return; }
   try {
-    const params = new URLSearchParams({
-      query,
-      page: "1",
-      pageSize: String(adminPageSize)
-    });
-    if (forceRefresh) {
-      params.set("refresh", "1");
-      params.set("t", String(Date.now()));
-    }
-    const data = await apiFetch(`/api/admin/stores?${params.toString()}`, {
-      cache: "no-store"
-    });
+    const params = new URLSearchParams({ query: q, page: "1", pageSize: String(adminPageSize) });
+    if (forceRefresh) { params.set("refresh", "1"); params.set("t", String(Date.now())); }
+    const data = await apiFetch(`/api/admin/stores?${params}`);
     populateStoreSelector(data.items || []);
     if (data.items?.length) {
       await loadAdminStoreDetail(selectedAdminStoreCode, forceRefresh);
-      setStatus(adminStatus, t("adminDashboardSynced"));
     } else {
-      showAdminStorePrompt(t("adminNoStoreMatch"));
-      setStatus(adminStatus, t("adminDashboardSynced"));
+      showAdminStorePromptMsg(t("adminNoStoreMatch"));
     }
-  } catch (error) {
+  } catch (err) {
     storeSelector.innerHTML = "";
-    showAdminStorePrompt(error.message || t("adminNoStoreMatch"));
-    setStatus(adminStatus, error.message || t("unsupportedRequest"), true);
+    showAdminStorePromptMsg(err.message || t("adminNoStoreMatch"));
   }
 }
 
-async function handleLogout(statusTarget) {
-  try {
-    await apiFetch("/api/auth/logout", { method: "POST" });
-  } catch (_error) {
-    // Ignore logout network issues and clear session locally.
-  } finally {
-    latestDashboard = null;
-    latestAdminDashboard = null;
-    selectedAdminStoreCode = "";
-    adminStoreQuery = "";
-    adminCurrentPage = 1;
-    storeSearchInput.value = "";
-    setAdminTab("total");
-    clearSession();
-    setViewMode("auth");
-    setStatus(statusTarget || authStatus, t("logoutDone"));
-    setStatus(authStatus, t("logoutDone"));
-    codeInput.focus();
-  }
+async function handleLogout() {
+  try { await apiFetch("/api/auth/logout", { method: "POST" }); } catch (_e) { /* ignore */ }
+  latestDashboard = null;
+  latestAdminDashboard = null;
+  selectedAdminStoreCode = "";
+  adminStoreQuery = "";
+  adminCurrentPage = 1;
+  storeSearchInput.value = "";
+  clearSession();
+  showLogin();
+  showToast(t("logoutDone"), "success");
+  codeInput.focus();
 }
 
 async function downloadAdminExport() {
-  exportBtn.disabled = true;
-  setStatus(adminStatus, t("exportLoading"));
-
+  showToast(t("exportLoading"));
   try {
     const blob = await apiBlobFetch(`/api/admin/export?refresh=1&t=${Date.now()}`);
     const monthKey = latestAdminDashboard?.summary?.monthKey || "report";
@@ -1309,167 +1146,145 @@ async function downloadAdminExport() {
     link.click();
     URL.revokeObjectURL(link.href);
     link.remove();
-    setStatus(adminStatus, t("exportDone"));
-  } catch (error) {
-    setStatus(adminStatus, error.message || t("unsupportedRequest"), true);
-  } finally {
-    exportBtn.disabled = false;
+    showToast(t("exportDone"), "success");
+  } catch (err) {
+    showToast(err.message || t("unsupportedRequest"), "error");
   }
 }
 
-loginForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
+/* ---------- 16. Event Handlers ---------- */
+loginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
   loginBtn.disabled = true;
-  setStatus(authStatus, t("loginLoading"));
+  authStatus.textContent = t("loginLoading");
+  authStatus.classList.remove("is-error");
 
   try {
-    const payload = {
-      code: codeInput.value.trim().toUpperCase(),
-      password: passwordInput.value.trim()
-    };
-    const data = await apiFetch("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
-
+    const payload = { code: codeInput.value.trim().toUpperCase(), password: passwordInput.value.trim() };
+    const data = await apiFetch("/api/auth/login", { method: "POST", body: JSON.stringify(payload) });
     setToken(data.token);
     setRole(data.role || "store");
     passwordInput.value = "";
-    setStatus(authStatus, "");
+    authStatus.textContent = "";
 
     if (data.role === "admin") {
       adminCurrentPage = 1;
       adminStoreQuery = "";
       storeSearchInput.value = "";
-      setAdminTab("total");
       renderAdminDashboard(data.adminDashboard);
-      setViewMode("admin");
+      showAdminApp();
     } else {
       renderStoreDashboard(data.dashboard);
-      setViewMode("store");
+      showStoreApp();
     }
-  } catch (error) {
+  } catch (err) {
     clearSession();
-    setStatus(authStatus, error.message || t("authError"), true);
+    authStatus.textContent = err.message || t("authError");
+    authStatus.classList.add("is-error");
   } finally {
     loginBtn.disabled = false;
   }
 });
 
-refreshBtn.addEventListener("click", () => {
-  loadStoreDashboard(true);
-});
-
-logoutBtn.addEventListener("click", () => {
-  handleLogout(authStatus);
-});
-
+refreshBtn.addEventListener("click", () => loadStoreDashboard(true));
+logoutBtn.addEventListener("click", handleLogout);
 adminRefreshBtn.addEventListener("click", () => {
   loadAdminDashboard(true);
-  if (activeAdminTab === "store" && adminStoreQuery.trim()) {
-    loadAdminStoreSearch(true);
-  }
+  if (adminStoreQuery.trim()) loadAdminStoreSearch(true);
 });
-
-adminLogoutBtn.addEventListener("click", () => {
-  handleLogout(authStatus);
-});
-
-exportBtn.addEventListener("click", () => {
-  downloadAdminExport();
-});
+adminLogoutBtn.addEventListener("click", handleLogout);
+exportBtn.addEventListener("click", downloadAdminExport);
 
 storeSelector.addEventListener("change", () => {
   selectedAdminStoreCode = storeSelector.value;
-  if (selectedAdminStoreCode) {
-    loadAdminStoreDetail(selectedAdminStoreCode);
-  }
+  if (selectedAdminStoreCode) loadAdminStoreDetail(selectedAdminStoreCode);
 });
 
+let searchDebounce = null;
 storeSearchInput.addEventListener("input", () => {
   adminStoreQuery = storeSearchInput.value;
-  loadAdminStoreSearch();
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => loadAdminStoreSearch(), 300);
 });
 
 adminPageSizeSelect.addEventListener("change", () => {
   adminPageSize = Number(adminPageSizeSelect.value || 20);
   adminCurrentPage = 1;
-  if (latestAdminDashboard) {
-    loadAdminDashboard();
-  }
-  if (adminStoreQuery.trim()) {
-    loadAdminStoreSearch();
-  }
+  if (latestAdminDashboard) loadAdminDashboard();
+  if (adminStoreQuery.trim()) loadAdminStoreSearch();
 });
 
 adminPrevPageBtn.addEventListener("click", () => {
-  if (adminCurrentPage > 1) {
-    adminCurrentPage -= 1;
-    if (latestAdminDashboard) {
-      loadAdminDashboard();
-    }
-  }
+  if (adminCurrentPage > 1) { adminCurrentPage--; if (latestAdminDashboard) loadAdminDashboard(); }
 });
 
 adminNextPageBtn.addEventListener("click", () => {
-  adminCurrentPage += 1;
-  if (latestAdminDashboard) {
-    loadAdminDashboard();
-  }
+  adminCurrentPage++;
+  if (latestAdminDashboard) loadAdminDashboard();
 });
 
-adminTabTotalBtn.addEventListener("click", () => {
-  setAdminTab("total");
-});
+// Language buttons — all pairs
+function setupLangBtns(esId, viId) {
+  const esBtn = $(esId);
+  const viBtn = $(viId);
+  if (esBtn) esBtn.addEventListener("click", () => setLanguage("es"));
+  if (viBtn) viBtn.addEventListener("click", () => setLanguage("vi"));
+}
+setupLangBtns("langEsBtn", "langViBtn");
+setupLangBtns("moreLangEsBtn", "moreLangViBtn");
+setupLangBtns("adminMoreLangEsBtn", "adminMoreLangViBtn");
 
-adminTabStoreBtn.addEventListener("click", () => {
-  setAdminTab("store");
-});
+// Header lang toggle cycles language
+$("storeLangBtn")?.addEventListener("click", () => setLanguage(currentLanguage === "es" ? "vi" : "es"));
+$("adminLangBtn")?.addEventListener("click", () => setLanguage(currentLanguage === "es" ? "vi" : "es"));
 
-langEsBtn.addEventListener("click", () => setLanguage("es"));
-langViBtn.addEventListener("click", () => setLanguage("vi"));
-
-window.addEventListener("beforeinstallprompt", (event) => {
-  event.preventDefault();
-  deferredInstallPrompt = event;
-  installBtn.classList.remove("hidden");
-});
-
-installBtn.addEventListener("click", async () => {
-  if (!deferredInstallPrompt) {
-    return;
-  }
-
+// Install buttons
+const moreInstallBtn = $("moreInstallBtn");
+function handleInstall() {
+  if (!deferredInstallPrompt) return;
   deferredInstallPrompt.prompt();
-  await deferredInstallPrompt.userChoice.catch(() => null);
+  deferredInstallPrompt.userChoice.catch(() => null);
   deferredInstallPrompt = null;
   installBtn.classList.add("hidden");
+  if (moreInstallBtn) moreInstallBtn.classList.add("hidden");
+}
+installBtn.addEventListener("click", handleInstall);
+if (moreInstallBtn) moreInstallBtn.addEventListener("click", handleInstall);
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  installBtn.classList.remove("hidden");
+  if (moreInstallBtn) moreInstallBtn.classList.remove("hidden");
 });
 
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => null);
-  });
+/* ---------- 17. Tab Setup ---------- */
+setupTabNavigation($("storeNav"), storeApp, (tabId) => { activeStoreTab = tabId; });
+setupTabNavigation($("adminNav"), adminApp, (tabId) => { activeAdminTab = tabId; });
+
+/* ---------- 18. Pull to Refresh ---------- */
+if (storeContent && pullIndicator) {
+  setupPullToRefresh(storeContent, pullIndicator, () => loadStoreDashboard(true));
 }
 
+/* ---------- 19. Service Worker ---------- */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => null));
+}
+
+/* ---------- 20. Init ---------- */
 applyStaticTranslations();
-setLanguage(currentLanguage);
 
 if (getToken()) {
   if (getRole() === "admin") {
-    setViewMode("admin");
-    setAdminTab("total");
+    showAdminApp();
     adminCurrentPage = 1;
     loadAdminDashboard(true);
   } else {
-    setViewMode("store");
+    showStoreApp();
     loadStoreDashboard(true);
   }
 } else {
-  setViewMode("auth");
-  storeName.textContent = t("defaultStoreName");
-  adminName.textContent = t("defaultAdminName");
-  achievedReward.textContent = t("achievedRewardEmpty");
-  achievedLevel.textContent = t("achievedRewardEmptyNote");
+  showLogin();
   codeInput.focus();
 }
