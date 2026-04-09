@@ -15,6 +15,7 @@ Ung dung web/PWA toi uu cho Android de diem ban:
 7. Muon them muc moi trong tuong lai, chi can them 1 dong moi trong sheet `LevelTargets`.
 8. Co `Tong so tien thuong` trong thang = tien thuong cua muc cao nhat da dat + tong tien thuong cua cac loai thue bao da dat chi tieu.
 9. Giao dien mac dinh la tieng Tay Ban Nha cho nguoi dung Peru, va co the chuyen qua lai giua `ES` va `VI`.
+10. Co user `admin` de xem ket qua tung diem ban, xem tong hop tat ca diem ban va xuat file Excel.
 
 ## Chay ung dung
 
@@ -105,6 +106,7 @@ Tai khoan test san trong file mau:
 - `CUSPS0001 / 123456`
 - `CUSPS0002 / abc789`
 - `CUSPS0003 / pdv2026`
+- Admin duoc cau hinh trong file `.env`, khong nam trong Google Sheets
 
 De cai tren Android:
 
@@ -118,6 +120,10 @@ De cai tren Android:
 PORT=3000
 APP_TIMEZONE=America/Lima
 SESSION_SECRET=change-this-secret
+ADMIN_USERNAME=ADMIN01
+ADMIN_PASSWORD=change-this-admin-password
+ADMIN_NAME=Administrador Regional
+# ADMIN_ACCOUNTS_JSON=[{"username":"ADMIN01","password":"secret","name":"Administrador Regional"}]
 
 GOOGLE_SHEETS_SPREADSHEET_ID=your_spreadsheet_id
 GOOGLE_SHEETS_CLIENT_EMAIL=service-account@project-id.iam.gserviceaccount.com
@@ -177,6 +183,28 @@ Ghi chu:
 - De cap nhat app, chi can sua hoac them dong trong `DailyResults`.
 - Khuyen nghi dung dinh dang ngay `YYYY-MM-DD`.
 
+### Tai khoan admin trong file cau hinh
+
+Tai khoan admin khong luu trong Google Sheets. Khai bao trong file `.env` cua app:
+
+```env
+ADMIN_USERNAME=ADMIN01
+ADMIN_PASSWORD=your-strong-admin-password
+ADMIN_NAME=Administrador Regional
+```
+
+Neu muon cau hinh nhieu admin, dung:
+
+```env
+ADMIN_ACCOUNTS_JSON=[{"username":"ADMIN01","password":"secret","name":"Administrador Regional"},{"username":"ADMIN02","password":"secret2","name":"Supervisor Lima"}]
+```
+
+Ghi chu:
+
+- `ADMIN_USERNAME` va `ADMIN_PASSWORD` du cho 1 tai khoan admin.
+- `ADMIN_ACCOUNTS_JSON` uu tien cao hon neu anh muon nhieu admin.
+- Thong tin admin nam trong server config, khong nam trong Google Sheets.
+
 ## Logic tinh ket qua
 
 - `Ket qua hom nay`: tong 4 loai thue bao cua ngay hien tai.
@@ -187,6 +215,8 @@ Ghi chu:
 - Mot muc chi duoc danh dau `Da dat` khi ca 4 chi tieu con deu dat.
 - `Moc ke tiep`: muc dau tien chua dat, kem cac chi tieu con con thieu.
 - `Tong so tien thuong`: lay tien thuong cua muc cao nhat da dat cong voi tong thuong cua cac loai thue bao da dat trong thang hien tai.
+- `Admin dashboard`: xem chi tiet tung diem ban, tong hop toan bo diem ban theo loai thue bao, theo muc, va tong tien thuong.
+- `Excel export`: xuat file `.xlsx` gom cac sheet tong hop, tung diem ban, theo loai thue bao va theo muc.
 
 ## Thiet lap quyen Google Sheets
 
@@ -201,6 +231,8 @@ Ghi chu:
 
 - `POST /api/auth/login`: dang nhap bang `code` va `password`.
 - `GET /api/dashboard`: lay dashboard cua diem ban dang login.
+- `GET /api/admin/dashboard`: lay dashboard quan tri cho toan bo diem ban.
+- `GET /api/admin/export`: xuat file Excel tong hop toan bo diem ban.
 - `POST /api/auth/logout`: dang xuat.
 - `GET /api/health`: kiem tra app va schema hien tai.
 

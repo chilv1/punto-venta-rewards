@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const path = require("path");
 const express = require("express");
+const XLSX = require("xlsx");
 require("dotenv").config();
 
 const app = express();
@@ -9,13 +10,17 @@ const timezone = (process.env.APP_TIMEZONE || "America/Lima").trim();
 const spreadsheetId = (process.env.GOOGLE_SHEETS_SPREADSHEET_ID || "").trim();
 const googleClientEmail = (process.env.GOOGLE_SHEETS_CLIENT_EMAIL || "").trim();
 const googlePrivateKey = (process.env.GOOGLE_SHEETS_PRIVATE_KEY || "").trim();
-const storesRange = (process.env.GOOGLE_SHEETS_STORES_RANGE || "Stores!A:H").trim();
+const storesRange = (process.env.GOOGLE_SHEETS_STORES_RANGE || "Stores!A:L").trim();
 const levelTargetsRange = (process.env.GOOGLE_SHEETS_LEVEL_TARGETS_RANGE || "LevelTargets!A:I").trim();
 const resultsRange = (process.env.GOOGLE_SHEETS_RESULTS_RANGE || "DailyResults!A:G").trim();
 const sessionSecret = (process.env.SESSION_SECRET || "change-this-secret").trim();
 const sessionTtlMs = Number(process.env.SESSION_TTL_MS || 1000 * 60 * 60 * 24);
 const sheetsCacheTtlMs = Number(process.env.GOOGLE_SHEETS_CACHE_TTL_MS || 60 * 1000);
 const defaultRewards = [50, 100, 150];
+const adminAccountsJson = (process.env.ADMIN_ACCOUNTS_JSON || "").trim();
+const adminUsername = (process.env.ADMIN_USERNAME || "").trim();
+const adminPassword = (process.env.ADMIN_PASSWORD || "").trim();
+const adminName = (process.env.ADMIN_NAME || "").trim();
 
 const SUBSCRIPTION_TYPES = [
   {
@@ -413,6 +418,43 @@ function sanitizeStore(storeRow) {
   };
 }
 
+function sanitizeAdmin(admin) {
+  return {
+    username: String(admin?.username || "")
+      .trim()
+      .toUpperCase(),
+    password: String(admin?.password || "").trim(),
+    name: String(admin?.name || "").trim()
+  };
+}
+
+function getConfiguredAdmins() {
+  if (adminAccountsJson) {
+    try {
+      const parsed = JSON.parse(adminAccountsJson);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map(sanitizeAdmin)
+          .filter((admin) => admin.username && admin.password);
+      }
+    } catch (error) {
+      console.error("Invalid ADMIN_ACCOUNTS_JSON:", error);
+    }
+  }
+
+  if (adminUsername && adminPassword) {
+    return [
+      sanitizeAdmin({
+        username: adminUsername,
+        password: adminPassword,
+        name: adminName
+      })
+    ];
+  }
+
+  return [];
+}
+
 function normalizeLevelTargets(levelRow) {
   const levelCode = String(
     pick(levelRow, ["level_code", "level_id", "code", "muc_code"])
@@ -699,11 +741,393 @@ function buildDashboardForStore(store, dailyResults) {
   };
 }
 
-function createSession(code) {
-  const raw = `${code}:${Date.now()}:${crypto.randomUUID()}:${sessionSecret}`;
+function sumBy(items, getValue) {
+  return items.reduce((sum, item) => sum + Number(getValue(item) || 0), 0);
+}
+
+function normalizeAdminPageSize(value) {
+  const parsed = Number.parseInt(String(value || "20"), 10);
+  if (parsed === 30) {
+    return 30;
+  }
+  return 20;
+}
+
+function normalizeAdminPage(value) {
+  const parsed = Number.parseInt(String(value || "1"), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function buildStoreDashboardSummary(storeDashboard) {
+  return {
+    code: storeDashboard.store.code,
+    name: storeDashboard.store.name,
+    area: storeDashboard.store.area,
+    todayTotal: storeDashboard.today.total,
+    cumulativeTotal: storeDashboard.cumulative.total,
+    cumulativeTarget: storeDashboard.cumulative.target,
+    cumulativeProgress: storeDashboard.cumulative.progress,
+    totalReward: storeDashboard.rewardSummary.total,
+    levelReward: storeDashboard.rewardSummary.levelReward,
+    categoryReward: storeDashboard.rewardSummary.categoryRewardTotal,
+    achievedLevel: storeDashboard.achievements.achievedLevel
+      ? {
+          label: storeDashboard.achievements.achievedLevel.label,
+          reward: storeDashboard.achievements.achievedLevel.reward
+        }
+      : null,
+    nextLevel: storeDashboard.achievements.nextLevel
+      ? {
+          label: storeDashboard.achievements.nextLevel.label,
+          reward: storeDashboard.achievements.nextLevel.reward
+        }
+      : null
+  };
+}
+
+function paginateItems(items, page, pageSize) {
+  const totalItems = items.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(Math.max(page, 1), totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  return {
+    items: items.slice(startIndex, startIndex + pageSize),
+    pagination: {
+      page: safePage,
+      pageSize,
+      totalItems,
+      totalPages,
+      startIndex
+    }
+  };
+}
+
+function buildAggregateCategories(storeDashboards) {
+  return SUBSCRIPTION_TYPES.map((type) => {
+    const categories = storeDashboards
+      .map((dashboard) => dashboard.categories.find((item) => item.id === type.id))
+      .filter(Boolean);
+
+    const daily = sumBy(categories, (item) => item.daily);
+    const cumulative = sumBy(categories, (item) => item.cumulative);
+    const target = sumBy(categories, (item) => item.target);
+    const rewardEarned = sumBy(
+      categories.filter((item) => item.reached && item.reward > 0),
+      (item) => item.reward
+    );
+
+    return {
+      id: type.id,
+      label: type.label,
+      shortLabel: type.shortLabel,
+      daily,
+      cumulative,
+      target,
+      remaining: Math.max(0, target - cumulative),
+      progress: target > 0 ? Math.min(100, (cumulative / target) * 100) : 0,
+      reachedStores: categories.filter((item) => item.reached).length,
+      rewardEarned
+    };
+  });
+}
+
+function buildAggregateLevels(storeDashboards) {
+  const levelMap = new Map();
+
+  for (const dashboard of storeDashboards) {
+    for (const level of dashboard.levels) {
+      const mapKey = `${level.order}::${level.label}`;
+      if (!levelMap.has(mapKey)) {
+        levelMap.set(mapKey, {
+          id: level.id,
+          label: level.label,
+          order: level.order,
+          reward: level.reward,
+          storesWithLevel: 0,
+          reachedStores: 0,
+          rewardEarned: 0,
+          requirements: SUBSCRIPTION_TYPES.map((type) => ({
+            id: type.id,
+            label: type.label,
+            shortLabel: type.shortLabel,
+            actual: 0,
+            target: 0,
+            remaining: 0,
+            progress: 0,
+            reached: false
+          }))
+        });
+      }
+
+      const aggregate = levelMap.get(mapKey);
+      aggregate.storesWithLevel += 1;
+      if (level.reached) {
+        aggregate.reachedStores += 1;
+        aggregate.rewardEarned += level.reward;
+      }
+
+      for (const requirement of level.requirements) {
+        const aggregateRequirement = aggregate.requirements.find((item) => item.id === requirement.id);
+        if (!aggregateRequirement) {
+          continue;
+        }
+        aggregateRequirement.actual += Number(requirement.actual || 0);
+        aggregateRequirement.target += Number(requirement.target || 0);
+      }
+    }
+  }
+
+  return Array.from(levelMap.values())
+    .map((level) => {
+      const requirements = level.requirements.map((requirement) => {
+        const progress =
+          requirement.target > 0 ? Math.min(100, (requirement.actual / requirement.target) * 100) : 0;
+        return {
+          ...requirement,
+          remaining: Math.max(0, requirement.target - requirement.actual),
+          progress,
+          reached: requirement.target > 0 ? requirement.actual >= requirement.target : false
+        };
+      });
+
+      const activeRequirements = requirements.filter((item) => item.target > 0);
+      return {
+        ...level,
+        requirements,
+        progress:
+          activeRequirements.length > 0
+            ? Math.min(...activeRequirements.map((item) => item.progress))
+            : 0
+      };
+    })
+    .sort((left, right) => left.order - right.order || left.label.localeCompare(right.label));
+}
+
+function buildAdminOverview(storeDashboards, admin) {
+  const aggregateCategories = buildAggregateCategories(storeDashboards);
+  const aggregateLevels = buildAggregateLevels(storeDashboards);
+  const storesCount = storeDashboards.length;
+  const todayTotal = sumBy(storeDashboards, (item) => item.today.total);
+  const cumulativeTotal = sumBy(storeDashboards, (item) => item.cumulative.total);
+  const cumulativeTarget = sumBy(storeDashboards, (item) => item.cumulative.target);
+  const totalReward = sumBy(storeDashboards, (item) => item.rewardSummary.total);
+  const levelRewardTotal = sumBy(storeDashboards, (item) => item.rewardSummary.levelReward);
+  const categoryRewardTotal = sumBy(storeDashboards, (item) => item.rewardSummary.categoryRewardTotal);
+
+  return {
+    admin: {
+      username: admin.username,
+      name: admin.name || admin.username
+    },
+    summary: {
+      storesCount,
+      todayTotal,
+      cumulativeTotal,
+      cumulativeTarget,
+      progress: cumulativeTarget > 0 ? Math.min(100, (cumulativeTotal / cumulativeTarget) * 100) : 0,
+      totalReward,
+      levelRewardTotal,
+      categoryRewardTotal,
+      monthKey: getCurrentMonthKey()
+    },
+    aggregateCategories,
+    aggregateLevels,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function buildAdminStoresPage(storeDashboards, options = {}) {
+  const page = normalizeAdminPage(options.page);
+  const pageSize = normalizeAdminPageSize(options.pageSize);
+  const storeItems = storeDashboards.map(buildStoreDashboardSummary);
+  const { items, pagination } = paginateItems(storeItems, page, pageSize);
+  return {
+    items,
+    pagination
+  };
+}
+
+function buildAdminStoreSearch(storeDashboards, options = {}) {
+  const page = normalizeAdminPage(options.page);
+  const pageSize = normalizeAdminPageSize(options.pageSize);
+  const query = String(options.query || "")
+    .trim()
+    .toUpperCase();
+
+  const filtered = query
+    ? storeDashboards.filter((item) => item.store.code.toUpperCase().includes(query))
+    : [];
+  const storeItems = filtered.map(buildStoreDashboardSummary);
+  const { items, pagination } = paginateItems(storeItems, page, pageSize);
+
+  return {
+    query,
+    items,
+    pagination
+  };
+}
+
+function buildAdminDashboard(stores, dailyResults, admin, options = {}) {
+  const storeDashboards = stores
+    .map((store) => buildDashboardForStore(store, dailyResults))
+    .sort((left, right) => left.store.code.localeCompare(right.store.code));
+
+  return {
+    ...buildAdminOverview(storeDashboards, admin),
+    storesPage: buildAdminStoresPage(storeDashboards, options)
+  };
+}
+
+function buildAdminStoreDetail(stores, dailyResults, code) {
+  const normalizedCode = String(code || "")
+    .trim()
+    .toUpperCase();
+  const store = stores.find((item) => item.code === normalizedCode);
+  if (!store) {
+    return null;
+  }
+  return buildDashboardForStore(store, dailyResults);
+}
+
+function buildAdminExportWorkbook(adminDashboard) {
+  const workbook = XLSX.utils.book_new();
+
+  const summaryRows = [
+    {
+      admin: adminDashboard.admin.name,
+      month: adminDashboard.summary.monthKey,
+      stores_count: adminDashboard.summary.storesCount,
+      today_total: adminDashboard.summary.todayTotal,
+      cumulative_total: adminDashboard.summary.cumulativeTotal,
+      cumulative_target: adminDashboard.summary.cumulativeTarget,
+      cumulative_progress_percent: Math.round(adminDashboard.summary.progress),
+      total_reward_pen: adminDashboard.summary.totalReward,
+      total_level_reward_pen: adminDashboard.summary.levelRewardTotal,
+      total_category_reward_pen: adminDashboard.summary.categoryRewardTotal
+    }
+  ];
+
+  const storeRows = adminDashboard.storeDashboards.map((storeDashboard) => ({
+    code: storeDashboard.store.code,
+    name: storeDashboard.store.name,
+    area: storeDashboard.store.area,
+    today_total: storeDashboard.today.total,
+    cumulative_total: storeDashboard.cumulative.total,
+    cumulative_target: storeDashboard.cumulative.target,
+    cumulative_progress_percent: Math.round(storeDashboard.cumulative.progress),
+    total_reward_pen: storeDashboard.rewardSummary.total,
+    level_reward_pen: storeDashboard.rewardSummary.levelReward,
+    category_reward_pen: storeDashboard.rewardSummary.categoryRewardTotal,
+    achieved_level: storeDashboard.achievements.achievedLevel?.label || "",
+    achieved_level_reward_pen: storeDashboard.achievements.achievedLevel?.reward || 0,
+    next_level: storeDashboard.achievements.nextLevel?.label || ""
+  }));
+
+  const categoryRows = adminDashboard.storeDashboards.flatMap((storeDashboard) =>
+    storeDashboard.categories.map((category) => ({
+      store_code: storeDashboard.store.code,
+      store_name: storeDashboard.store.name,
+      category_id: category.id,
+      category_label: category.label,
+      daily: category.daily,
+      cumulative: category.cumulative,
+      target: category.target,
+      remaining: category.remaining,
+      progress_percent: Math.round(category.progress),
+      reached: category.reached ? "YES" : "NO",
+      reward_pen: category.reward
+    }))
+  );
+
+  const levelRows = adminDashboard.storeDashboards.flatMap((storeDashboard) =>
+    storeDashboard.levels.map((level) => ({
+      store_code: storeDashboard.store.code,
+      store_name: storeDashboard.store.name,
+      level_code: level.id,
+      level_label: level.label,
+      level_order: level.order,
+      reward_pen: level.reward,
+      progress_percent: Math.round(level.progress),
+      reached: level.reached ? "YES" : "NO",
+      prepaid_new_line_actual: level.requirements.find((item) => item.id === "prepaid_new_line")?.actual || 0,
+      prepaid_new_line_target: level.requirements.find((item) => item.id === "prepaid_new_line")?.target || 0,
+      prepaid_portabilidad_actual:
+        level.requirements.find((item) => item.id === "prepaid_portabilidad")?.actual || 0,
+      prepaid_portabilidad_target:
+        level.requirements.find((item) => item.id === "prepaid_portabilidad")?.target || 0,
+      postpaid_new_line_actual: level.requirements.find((item) => item.id === "postpaid_new_line")?.actual || 0,
+      postpaid_new_line_target: level.requirements.find((item) => item.id === "postpaid_new_line")?.target || 0,
+      postpaid_portabilidad_actual:
+        level.requirements.find((item) => item.id === "postpaid_portabilidad")?.actual || 0,
+      postpaid_portabilidad_target:
+        level.requirements.find((item) => item.id === "postpaid_portabilidad")?.target || 0
+    }))
+  );
+
+  const aggregateCategoryRows = adminDashboard.aggregateCategories.map((category) => ({
+    category_id: category.id,
+    category_label: category.label,
+    daily: category.daily,
+    cumulative: category.cumulative,
+    target: category.target,
+    remaining: category.remaining,
+    progress_percent: Math.round(category.progress),
+    reached_stores: category.reachedStores,
+    reward_earned_pen: category.rewardEarned
+  }));
+
+  const aggregateLevelRows = adminDashboard.aggregateLevels.map((level) => ({
+    level_label: level.label,
+    level_order: level.order,
+    reward_pen: level.reward,
+    progress_percent: Math.round(level.progress),
+    stores_with_level: level.storesWithLevel,
+    reached_stores: level.reachedStores,
+    reward_earned_pen: level.rewardEarned,
+    prepaid_new_line_actual: level.requirements.find((item) => item.id === "prepaid_new_line")?.actual || 0,
+    prepaid_new_line_target: level.requirements.find((item) => item.id === "prepaid_new_line")?.target || 0,
+    prepaid_portabilidad_actual:
+      level.requirements.find((item) => item.id === "prepaid_portabilidad")?.actual || 0,
+    prepaid_portabilidad_target:
+      level.requirements.find((item) => item.id === "prepaid_portabilidad")?.target || 0,
+    postpaid_new_line_actual: level.requirements.find((item) => item.id === "postpaid_new_line")?.actual || 0,
+    postpaid_new_line_target: level.requirements.find((item) => item.id === "postpaid_new_line")?.target || 0,
+    postpaid_portabilidad_actual:
+      level.requirements.find((item) => item.id === "postpaid_portabilidad")?.actual || 0,
+    postpaid_portabilidad_target:
+      level.requirements.find((item) => item.id === "postpaid_portabilidad")?.target || 0
+  }));
+
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), "Summary");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(storeRows), "Stores");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(categoryRows), "Categories");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(levelRows), "Levels");
+  XLSX.utils.book_append_sheet(
+    workbook,
+    XLSX.utils.json_to_sheet(aggregateCategoryRows),
+    "AggregateCategories"
+  );
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(aggregateLevelRows), "AggregateLevels");
+
+  return workbook;
+}
+
+function buildAdminExportData(stores, dailyResults, admin) {
+  const storeDashboards = stores
+    .map((store) => buildDashboardForStore(store, dailyResults))
+    .sort((left, right) => left.store.code.localeCompare(right.store.code));
+
+  return {
+    ...buildAdminOverview(storeDashboards, admin),
+    storeDashboards
+  };
+}
+
+function createSession(payload) {
+  const raw = `${payload.role}:${payload.code || payload.username}:${Date.now()}:${crypto.randomUUID()}:${sessionSecret}`;
   const token = crypto.createHash("sha256").update(raw).digest("hex");
   sessions.set(token, {
-    code,
+    ...payload,
     expiresAt: Date.now() + sessionTtlMs
   });
   return token;
@@ -732,11 +1156,21 @@ function authenticate(req, res, next) {
   return next();
 }
 
+function requireRole(role) {
+  return (req, res, next) => {
+    if (req.session?.role !== role) {
+      return jsonError(res, 403, "Bạn không có quyền truy cập khu vực này.");
+    }
+    return next();
+  };
+}
+
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     googleSheetsConfigured: isSheetsConfigured(),
-    schema: "subscription-metrics-v4"
+    adminConfigured: getConfiguredAdmins().length > 0,
+    schema: "subscription-metrics-v5-admin-env"
   });
 });
 
@@ -750,15 +1184,39 @@ app.post("/api/auth/login", async (req, res) => {
     }
 
     const { stores, dailyResults } = await getDataSnapshot();
+    const admins = getConfiguredAdmins();
+    const admin = admins.find((item) => item.username === code && item.password === password);
+
+    if (admin) {
+      const token = createSession({
+        role: "admin",
+        username: admin.username,
+        name: admin.name
+      });
+
+      return res.json({
+        token,
+        role: "admin",
+        adminDashboard: buildAdminDashboard(stores, dailyResults, admin, {
+          page: 1,
+          pageSize: 20
+        })
+      });
+    }
+
     const store = stores.find((item) => item.code === code && item.password === password);
 
     if (!store) {
       return jsonError(res, 401, "Sai mã điểm bán hoặc mật khẩu.");
     }
 
-    const token = createSession(store.code);
+    const token = createSession({
+      role: "store",
+      code: store.code
+    });
     return res.json({
       token,
+      role: "store",
       dashboard: buildDashboardForStore(store, dailyResults)
     });
   } catch (error) {
@@ -767,7 +1225,7 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-app.get("/api/dashboard", authenticate, async (req, res) => {
+app.get("/api/dashboard", authenticate, requireRole("store"), async (req, res) => {
   try {
     const force = req.query.refresh === "1";
     const { stores, dailyResults } = await getDataSnapshot({ force });
@@ -788,6 +1246,92 @@ app.get("/api/dashboard", authenticate, async (req, res) => {
 app.post("/api/auth/logout", authenticate, (req, res) => {
   sessions.delete(req.sessionToken);
   return res.json({ ok: true });
+});
+
+app.get("/api/admin/dashboard", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    const force = req.query.refresh === "1";
+    const { stores, dailyResults } = await getDataSnapshot({ force });
+    return res.json(
+      buildAdminDashboard(stores, dailyResults, req.session, {
+        page: req.query.page,
+        pageSize: req.query.pageSize
+      })
+    );
+  } catch (error) {
+    console.error("Admin dashboard error:", error);
+    return jsonError(res, 500, error.message || "Không thể tải dashboard quản trị.");
+  }
+});
+
+app.get("/api/admin/stores", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    const force = req.query.refresh === "1";
+    const { stores, dailyResults } = await getDataSnapshot({ force });
+    const storeDashboards = stores
+      .map((store) => buildDashboardForStore(store, dailyResults))
+      .sort((left, right) => left.store.code.localeCompare(right.store.code));
+
+    return res.json(
+      buildAdminStoreSearch(storeDashboards, {
+        query: req.query.query,
+        page: req.query.page,
+        pageSize: req.query.pageSize
+      })
+    );
+  } catch (error) {
+    console.error("Admin stores search error:", error);
+    return jsonError(res, 500, error.message || "Không thể tìm kiếm điểm bán.");
+  }
+});
+
+app.get("/api/admin/store", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    const force = req.query.refresh === "1";
+    const code = String(req.query.code || "")
+      .trim()
+      .toUpperCase();
+    if (!code) {
+      return jsonError(res, 400, "Vui lòng nhập mã điểm bán.");
+    }
+
+    const { stores, dailyResults } = await getDataSnapshot({ force });
+    const detail = buildAdminStoreDetail(stores, dailyResults, code);
+    if (!detail) {
+      return jsonError(res, 404, "Điểm bán không còn tồn tại trên hệ thống.");
+    }
+
+    return res.json(detail);
+  } catch (error) {
+    console.error("Admin store detail error:", error);
+    return jsonError(res, 500, error.message || "Không thể tải chi tiết điểm bán.");
+  }
+});
+
+app.get("/api/admin/export", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    const force = req.query.refresh === "1";
+    const { stores, dailyResults } = await getDataSnapshot({ force });
+    const adminDashboard = buildAdminExportData(stores, dailyResults, req.session);
+    const workbook = buildAdminExportWorkbook(adminDashboard);
+    const buffer = XLSX.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx"
+    });
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=\"pdv-admin-report-${adminDashboard.summary.monthKey}.xlsx\"`
+    );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    return res.send(buffer);
+  } catch (error) {
+    console.error("Admin export error:", error);
+    return jsonError(res, 500, error.message || "Không thể xuất file Excel.");
+  }
 });
 
 app.use((error, _req, res, _next) => {

@@ -43,14 +43,14 @@
       <section id="authPanel" class="panel auth-panel">
         <div class="panel-head">
           <p id="loginEyebrow" class="eyebrow">Ingreso</p>
-          <h2 id="loginTitle">Ingreso del punto de venta</h2>
-          <p id="loginText" class="panel-text">El usuario es el código del punto de venta, por ejemplo `CUSPS0001`. La contraseña es entregada por el sistema.</p>
+          <h2 id="loginTitle">Ingreso del sistema</h2>
+          <p id="loginText" class="panel-text">Use el código del punto de venta o el usuario administrador. La contraseña es entregada por el sistema.</p>
         </div>
 
         <form id="loginForm" class="login-form">
           <label class="field">
-            <span id="codeLabel">Código del punto de venta</span>
-            <input id="codeInput" name="code" type="text" placeholder="CUSPS0001" autocomplete="username" required />
+            <span id="codeLabel">Usuario o código</span>
+            <input id="codeInput" name="code" type="text" placeholder="CUSPS0001 / ADMIN01" autocomplete="username" required />
           </label>
 
           <label class="field">
@@ -133,6 +133,132 @@
         </section>
 
         <p id="dashboardStatus" class="status-text"></p>
+      </section>
+
+      <section id="adminPanel" class="panel dashboard-panel hidden">
+        <div class="dashboard-topbar">
+          <div>
+            <p id="adminEyebrow" class="eyebrow">Panel administrador</p>
+            <h2 id="adminName">Administrador</h2>
+            <p id="adminMeta" class="panel-text"></p>
+          </div>
+          <div class="topbar-actions">
+            <button id="adminRefreshBtn" class="secondary-btn" type="button">Actualizar</button>
+            <button id="exportBtn" class="primary-btn" type="button">Exportar Excel</button>
+            <button id="adminLogoutBtn" class="ghost-btn" type="button">Cerrar sesión</button>
+          </div>
+        </div>
+
+        <div class="admin-menu">
+          <button id="adminTabTotalBtn" class="admin-menu-btn admin-menu-btn-active" type="button">Total</button>
+          <button id="adminTabStoreBtn" class="admin-menu-btn" type="button">Punto de venta</button>
+        </div>
+
+        <div id="adminTotalView" class="admin-view">
+          <div class="summary-grid">
+            <article class="summary-card summary-card-main">
+              <span id="adminTotalRewardLabel">Premio total de todos los puntos</span>
+              <strong id="adminTotalReward">S/ 0</strong>
+              <p id="adminTotalRewardMeta" class="summary-note"></p>
+            </article>
+
+            <article class="summary-card summary-card-reward">
+              <span id="adminStoresCountLabel">Puntos de venta</span>
+              <strong id="adminStoresCount">0</strong>
+              <p id="adminStoresMeta" class="summary-note"></p>
+            </article>
+
+            <article class="summary-card">
+              <span id="adminTodayTotalLabel">Resultado de hoy</span>
+              <strong id="adminTodayTotal">0 Líneas</strong>
+              <p id="adminTodayMeta" class="summary-note"></p>
+            </article>
+
+            <article class="summary-card">
+              <span id="adminCumulativeTotalLabel">Acumulado total</span>
+              <strong id="adminCumulativeTotal">0 Líneas</strong>
+              <p id="adminCumulativeMeta" class="summary-note"></p>
+            </article>
+          </div>
+
+          <section class="category-section">
+            <div class="section-head">
+              <h3 id="adminAggregateCategoryTitle">Consolidado por tipo de línea</h3>
+              <p id="adminAggregateCategoryText" class="panel-text">Resumen de todas las líneas y metas de todos los puntos de venta.</p>
+            </div>
+            <div id="adminAggregateCategoriesGrid" class="categories-grid"></div>
+          </section>
+
+          <section class="level-section">
+            <div class="section-head">
+              <h3 id="adminAggregateLevelTitle">Consolidado por niveles</h3>
+              <p id="adminAggregateLevelText" class="panel-text">Cada nivel muestra el avance acumulado y cuántos puntos de venta ya lo lograron.</p>
+            </div>
+            <div id="adminAggregateLevelsGrid" class="levels-grid"></div>
+          </section>
+
+          <section class="history-section">
+            <div class="section-head">
+              <div>
+                <h3 id="adminStoresTableTitle">Todos los puntos de venta</h3>
+                <p id="adminStoresTableText" class="panel-text">Vista rápida de cumplimiento, premio total y nivel alcanzado por cada punto.</p>
+              </div>
+              <label class="admin-selector field-inline table-size-control">
+                <span id="adminPageSizeLabel">Filas por página</span>
+                <select id="adminPageSizeSelect" class="select-input">
+                  <option value="20">20</option>
+                  <option value="30">30</option>
+                </select>
+              </label>
+            </div>
+            <div class="table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th id="adminTableHeadCode">Código</th>
+                    <th id="adminTableHeadName">Punto</th>
+                    <th id="adminTableHeadArea">Zona</th>
+                    <th id="adminTableHeadReward">Premio total</th>
+                    <th id="adminTableHeadProgress">Avance</th>
+                    <th id="adminTableHeadLevel">Nivel</th>
+                  </tr>
+                </thead>
+                <tbody id="adminStoresTableBody"></tbody>
+              </table>
+            </div>
+            <div class="table-pagination">
+              <p id="adminPaginationInfo" class="panel-text"></p>
+              <div class="pagination-actions">
+                <button id="adminPrevPageBtn" class="secondary-btn" type="button">Anterior</button>
+                <button id="adminNextPageBtn" class="secondary-btn" type="button">Siguiente</button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div id="adminStoreView" class="admin-view hidden">
+          <section class="category-section">
+            <div class="section-head">
+              <div>
+                <h3 id="adminStoreSectionTitle">Detalle por punto de venta</h3>
+                <p id="adminStoreSectionText" class="panel-text">Seleccione un punto de venta para revisar sus metas por tipo de línea, niveles y premio total.</p>
+              </div>
+              <div class="admin-search-group">
+                <label class="admin-selector field-inline">
+                  <span id="storeSearchLabel">Buscar por código</span>
+                  <input id="storeSearchInput" class="select-input" type="text" placeholder="CUSPS0001" />
+                </label>
+                <label class="admin-selector field-inline">
+                  <span id="storeSelectorLabel">Punto de venta</span>
+                  <select id="storeSelector" class="select-input"></select>
+                </label>
+              </div>
+            </div>
+            <div id="adminStoreDetail" class="admin-store-detail"></div>
+          </section>
+        </div>
+
+        <p id="adminStatus" class="status-text"></p>
       </section>
     </main>
 

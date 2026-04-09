@@ -156,17 +156,20 @@ def main():
     }.items():
         results.column_dimensions[column].width = width
 
-    readme["A1"] = "Huong dan cap nhat du lieu v4"
+    readme["A1"] = "Huong dan cap nhat du lieu v5 admin"
     readme["A1"].font = Font(bold=True, size=14)
     readme["A3"] = "1. Sheet Stores: khai bao user, password, chi tieu tong va tien thuong cua 4 loai thue bao."
     readme["A4"] = "2. Sheet LevelTargets: moi dong la 1 muc chi tieu cua 1 diem ban, kem reward va 4 chi tieu con."
     readme["A5"] = "3. Muon them muc moi trong tuong lai, chi can them 1 dong moi vao LevelTargets."
     readme["A6"] = "4. Sheet DailyResults: moi dong la ket qua 1 diem ban trong 1 ngay."
-    readme["A7"] = "5. App chi cong nhan dat muc khi ca 4 loai thue bao cua muc do deu dat."
-    readme["A9"] = "Tai khoan test:"
-    readme["A10"] = "CUSPS0001 / 123456"
-    readme["A11"] = "CUSPS0002 / abc789"
-    readme["A12"] = "CUSPS0003 / pdv2026"
+    readme["A7"] = "5. Tai khoan admin duoc cau hinh trong file .env cua app, khong luu trong Google Sheets."
+    readme["A8"] = "6. App chi cong nhan dat muc khi ca 4 loai thue bao cua muc do deu dat."
+    readme["A10"] = "Tai khoan test diem ban:"
+    readme["A11"] = "CUSPS0001 / 123456"
+    readme["A12"] = "CUSPS0002 / abc789"
+    readme["A13"] = "CUSPS0003 / pdv2026"
+    readme["A15"] = "Tai khoan admin mau trong .env.example:"
+    readme["A16"] = "ADMIN01 / change-this-admin-password"
     readme.column_dimensions["A"].width = 100
 
     workbook.save(OUTPUT)
