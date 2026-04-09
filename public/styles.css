@@ -147,7 +147,6 @@ body {
 .category-foot,
 .history-card strong,
 .history-meta,
-.metric-card span,
 .category-reward {
   line-height: 1.5;
 }
@@ -167,7 +166,6 @@ body {
   opacity: 0.82;
 }
 
-.hero-metrics,
 .summary-grid,
 .levels-grid,
 .categories-grid,
@@ -178,31 +176,11 @@ body {
   gap: 12px;
 }
 
-.hero-metrics,
 .summary-grid,
 .levels-grid,
 .categories-grid,
 .history-grid {
   grid-template-columns: 1fr;
-}
-
-.metric-card {
-  padding: 14px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-}
-
-.metric-card span {
-  display: block;
-  color: rgba(255, 250, 245, 0.74);
-  font-size: 13px;
-}
-
-.metric-card strong {
-  display: block;
-  margin-top: 4px;
-  font-size: 1.05rem;
 }
 
 .install-btn,
@@ -587,7 +565,6 @@ button:disabled {
     border-radius: 28px;
   }
 
-  .hero-metrics,
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -618,7 +595,6 @@ button:disabled {
 }
 
 @media (min-width: 1040px) {
-  .hero-metrics,
   .summary-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }

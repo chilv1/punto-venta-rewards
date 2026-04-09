@@ -37,8 +37,6 @@ const translations = {
     heroEyebrow: "Subscription tracker v4",
     heroSubtitle:
       "Sigue los resultados diarios, el acumulado por 4 tipos de líneas y los premios dinámicos por niveles. Cada nivel tiene metas por tipo de línea y se pueden agregar nuevos niveles en el futuro.",
-    metricPrepago: "Prepago",
-    metricPostpago: "Postpago",
     installBtn: "Instalar app en Android",
     loginEyebrow: "Ingreso",
     loginTitle: "Ingreso del punto de venta",
@@ -120,8 +118,6 @@ const translations = {
     heroEyebrow: "Subscription tracker v4",
     heroSubtitle:
       "Theo dõi kết quả ngày, luỹ kế theo 4 loại thuê bao và các mức thưởng động. Mỗi mức có chỉ tiêu riêng cho từng loại thuê bao, và có thể thêm mức mới trong tương lai.",
-    metricPrepago: "Trả trước",
-    metricPostpago: "Trả sau",
     installBtn: "Cài app trên Android",
     loginEyebrow: "Ingreso",
     loginTitle: "Đăng nhập điểm bán",
@@ -356,10 +352,6 @@ function applyStaticTranslations() {
   document.querySelector(".language-switch")?.setAttribute("aria-label", t("installGroupLabel"));
   document.getElementById("heroEyebrow").textContent = t("heroEyebrow");
   document.getElementById("heroSubtitle").textContent = t("heroSubtitle");
-  document.getElementById("metric1Type").textContent = t("metricPrepago");
-  document.getElementById("metric2Type").textContent = t("metricPrepago");
-  document.getElementById("metric3Type").textContent = t("metricPostpago");
-  document.getElementById("metric4Type").textContent = t("metricPostpago");
   installBtn.textContent = t("installBtn");
   document.getElementById("loginEyebrow").textContent = t("loginEyebrow");
   document.getElementById("loginTitle").textContent = t("loginTitle");
