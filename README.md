@@ -32,8 +32,8 @@ Mo trinh duyet tai `http://localhost:3000`.
 
 Project da co san:
 
-- [Dockerfile](/Users/chilevan/Documents/New%20project/Dockerfile)
-- [docker-compose.yml](/Users/chilevan/Documents/New%20project/docker-compose.yml)
+- [Dockerfile](Dockerfile)
+- [docker-compose.yml](docker-compose.yml)
 
 Phu hop voi VPS dang chay Traefik va domain `pdv.bitelbot.com`.
 
@@ -41,7 +41,7 @@ Phu hop voi VPS dang chay Traefik va domain `pdv.bitelbot.com`.
 
 ```bash
 cd /var/www
-git clone git@github.com:chilv1/punto-venta-rewards.git
+git clone git@github.com:username/punto-venta-rewards.git
 cd punto-venta-rewards
 ```
 
@@ -69,7 +69,7 @@ curl http://127.0.0.1:3000/api/health
 Luu y:
 
 - Traefik tren VPS da xu ly `pdv.bitelbot.com` va SSL.
-- File [docker-compose.yml](/Users/chilevan/Documents/New%20project/docker-compose.yml) da gan san labels cho Traefik.
+- File [docker-compose.yml](docker-compose.yml) da gan san labels cho Traefik.
 - Can cau hinh DNS `A record` cho `pdv.bitelbot.com` tro ve IP VPS.
 
 Moi lan cap nhat code:
@@ -84,7 +84,7 @@ docker compose up -d --build
 
 File mau da tao san tai:
 
-- `/Users/chilevan/Documents/New project/templates/google-sheet-template.xlsx`
+- `templates/google-sheet-template.xlsx`
 
 Neu muon tao lai file mau:
 
