@@ -291,8 +291,15 @@ function formatNumber(value) {
   }).format(Number(value || 0));
 }
 
+function getCountUnit(value) {
+  if (currentLanguage === "es") {
+    return Number(value || 0) === 1 ? "Línea" : "Líneas";
+  }
+  return "TB";
+}
+
 function formatCount(value) {
-  return `${formatNumber(value)} TB`;
+  return `${formatNumber(value)} ${getCountUnit(value)}`;
 }
 
 function formatCurrency(value) {
@@ -376,6 +383,11 @@ function applyStaticTranslations() {
   logoutBtn.textContent = t("logoutBtn");
   langEsBtn.classList.toggle("lang-btn-active", currentLanguage === "es");
   langViBtn.classList.toggle("lang-btn-active", currentLanguage === "vi");
+
+  if (!latestDashboard) {
+    todayTotal.textContent = formatCount(0);
+    cumulativeTotal.textContent = formatCount(0);
+  }
 }
 
 function setLanguage(language) {
