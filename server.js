@@ -1332,7 +1332,7 @@ app.get("/api/admin/stores", authenticate, requireRole("admin"), async (req, res
   try {
     const force = req.query.refresh === "1";
     const query = String(req.query.query || "").trim().toUpperCase();
-    const { stores, dailyResults } = await getDataSnapshot({ force });
+    const { stores, dailyResults, resultsByStore } = await getDataSnapshot({ force });
 
     // Filter stores FIRST by code, then only build dashboards for matching stores
     const matchingStores = query
