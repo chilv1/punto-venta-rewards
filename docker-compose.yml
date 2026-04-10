@@ -9,6 +9,8 @@ services:
       - .env
     expose:
       - "3000"
+    networks:
+      - traefik
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.pdv.rule=Host(`pdv.bitelbot.com`)"
@@ -16,3 +18,7 @@ services:
       - "traefik.http.routers.pdv.tls=true"
       - "traefik.http.routers.pdv.tls.certresolver=letsencrypt"
       - "traefik.http.services.pdv.loadbalancer.server.port=3000"
+
+networks:
+  traefik:
+    external: true
