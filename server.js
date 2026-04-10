@@ -136,6 +136,7 @@ const SUBSCRIPTION_TYPES = [
 const sessions = new Map();
 const sheetCache = new Map();
 let googleTokenCache = null;
+let adminDashboardCache = null;
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -529,6 +530,7 @@ function getFallbackLevelsFromStoreRow(storeRow) {
 
 async function getDataSnapshot(options = {}) {
   const { force = false } = options;
+  if (force) { adminDashboardCache = null; }
   const [storeRows, levelTargetRows, dailyResults] = await Promise.all([
     fetchRange(storesRange, { force }),
     fetchRange(levelTargetsRange, { force }),
@@ -558,9 +560,27 @@ async function getDataSnapshot(options = {}) {
     };
   });
 
+  // Pre-index dailyResults by store code for O(1) lookup per store
+  const resultsByStore = new Map();
+  const todayKey = getTodayKey();
+  const currentMonthKey = getCurrentMonthKey();
+  for (const row of dailyResults) {
+    const rowCode = String(pick(row, ["store_code", "code", "point_code", "cusps_code"]))
+      .trim()
+      .toUpperCase();
+    if (!rowCode) continue;
+    const dateKey = parseSheetDate(pick(row, ["date", "business_date", "ngay"]));
+    if (!dateKey || dateKey > todayKey || !dateKey.startsWith(currentMonthKey)) continue;
+    if (!resultsByStore.has(rowCode)) {
+      resultsByStore.set(rowCode, []);
+    }
+    resultsByStore.get(rowCode).push({ row, dateKey });
+  }
+
   return {
     stores,
-    dailyResults
+    dailyResults,
+    resultsByStore
   };
 }
 
@@ -603,34 +623,46 @@ function buildLevelStatus(level, cumulativeMap) {
   };
 }
 
-function buildDashboardForStore(store, dailyResults) {
+function buildDashboardForStore(store, dailyResults, resultsByStore) {
   const todayKey = getTodayKey();
   const currentMonthKey = getCurrentMonthKey();
   const historyMap = new Map();
   const cumulativeMap = createEmptyTypeMap();
   const targetMap = Object.fromEntries(store.targets.map((item) => [item.id, item.target]));
 
-  for (const row of dailyResults) {
-    const rowCode = String(pick(row, ["store_code", "code", "point_code", "cusps_code"]))
-      .trim()
-      .toUpperCase();
+  // Use pre-indexed results if available, otherwise fall back to full scan
+  const storeResults = resultsByStore
+    ? (resultsByStore.get(store.code) || [])
+    : null;
 
-    if (rowCode !== store.code) {
-      continue;
+  if (storeResults) {
+    // Fast path: pre-indexed, pre-filtered results
+    for (const { row, dateKey } of storeResults) {
+      const entry = historyMap.get(dateKey) || createEmptyTypeMap();
+      for (const type of SUBSCRIPTION_TYPES) {
+        const amount = parseAmount(pick(row, type.resultKeys));
+        entry[type.id] += amount;
+        cumulativeMap[type.id] += amount;
+      }
+      historyMap.set(dateKey, entry);
     }
-
-    const dateKey = parseSheetDate(pick(row, ["date", "business_date", "ngay"]));
-    if (!dateKey || dateKey > todayKey || !dateKey.startsWith(currentMonthKey)) {
-      continue;
+  } else {
+    // Fallback: full scan (for single-store detail calls)
+    for (const row of dailyResults) {
+      const rowCode = String(pick(row, ["store_code", "code", "point_code", "cusps_code"]))
+        .trim()
+        .toUpperCase();
+      if (rowCode !== store.code) continue;
+      const dateKey = parseSheetDate(pick(row, ["date", "business_date", "ngay"]));
+      if (!dateKey || dateKey > todayKey || !dateKey.startsWith(currentMonthKey)) continue;
+      const entry = historyMap.get(dateKey) || createEmptyTypeMap();
+      for (const type of SUBSCRIPTION_TYPES) {
+        const amount = parseAmount(pick(row, type.resultKeys));
+        entry[type.id] += amount;
+        cumulativeMap[type.id] += amount;
+      }
+      historyMap.set(dateKey, entry);
     }
-
-    const entry = historyMap.get(dateKey) || createEmptyTypeMap();
-    for (const type of SUBSCRIPTION_TYPES) {
-      const amount = parseAmount(pick(row, type.resultKeys));
-      entry[type.id] += amount;
-      cumulativeMap[type.id] += amount;
-    }
-    historyMap.set(dateKey, entry);
   }
 
   const history = Array.from(historyMap.entries())
@@ -971,18 +1003,19 @@ function buildAdminStoreSearch(storeDashboards, options = {}) {
   };
 }
 
-function buildAdminDashboard(stores, dailyResults, admin, options = {}) {
+function buildAdminDashboard(stores, dailyResults, admin, options = {}, resultsByStore) {
   const storeDashboards = stores
-    .map((store) => buildDashboardForStore(store, dailyResults))
+    .map((store) => buildDashboardForStore(store, dailyResults, resultsByStore))
     .sort((left, right) => left.store.code.localeCompare(right.store.code));
 
   return {
     ...buildAdminOverview(storeDashboards, admin),
-    storesPage: buildAdminStoresPage(storeDashboards, options)
+    storesPage: buildAdminStoresPage(storeDashboards, options),
+    _storeDashboards: storeDashboards
   };
 }
 
-function buildAdminStoreDetail(stores, dailyResults, code) {
+function buildAdminStoreDetail(stores, dailyResults, code, resultsByStore) {
   const normalizedCode = String(code || "")
     .trim()
     .toUpperCase();
@@ -990,7 +1023,7 @@ function buildAdminStoreDetail(stores, dailyResults, code) {
   if (!store) {
     return null;
   }
-  return buildDashboardForStore(store, dailyResults);
+  return buildDashboardForStore(store, dailyResults, resultsByStore);
 }
 
 function buildAdminExportWorkbook(adminDashboard) {
@@ -1116,9 +1149,9 @@ function buildAdminExportWorkbook(adminDashboard) {
   return workbook;
 }
 
-function buildAdminExportData(stores, dailyResults, admin) {
+function buildAdminExportData(stores, dailyResults, admin, resultsByStore) {
   const storeDashboards = stores
-    .map((store) => buildDashboardForStore(store, dailyResults))
+    .map((store) => buildDashboardForStore(store, dailyResults, resultsByStore))
     .sort((left, right) => left.store.code.localeCompare(right.store.code));
 
   return {
@@ -1187,7 +1220,7 @@ app.post("/api/auth/login", async (req, res) => {
       return jsonError(res, 400, "Vui lòng nhập mã điểm bán và mật khẩu.");
     }
 
-    const { stores, dailyResults } = await getDataSnapshot();
+    // Check admin credentials first (from env config — no Sheets fetch needed)
     const admins = getConfiguredAdmins();
     const admin = admins.find((item) => item.username === code && item.password === password);
 
@@ -1201,13 +1234,12 @@ app.post("/api/auth/login", async (req, res) => {
       return res.json({
         token,
         role: "admin",
-        adminDashboard: buildAdminDashboard(stores, dailyResults, admin, {
-          page: 1,
-          pageSize: 20
-        })
+        admin: { username: admin.username, name: admin.name || admin.username }
       });
     }
 
+    // Store login needs Sheets data to verify credentials
+    const { stores, dailyResults, resultsByStore } = await getDataSnapshot();
     const store = stores.find((item) => item.code === code && item.password === password);
 
     if (!store) {
@@ -1221,7 +1253,7 @@ app.post("/api/auth/login", async (req, res) => {
     return res.json({
       token,
       role: "store",
-      dashboard: buildDashboardForStore(store, dailyResults)
+      dashboard: buildDashboardForStore(store, dailyResults, resultsByStore)
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -1232,7 +1264,7 @@ app.post("/api/auth/login", async (req, res) => {
 app.get("/api/dashboard", authenticate, requireRole("store"), async (req, res) => {
   try {
     const force = req.query.refresh === "1";
-    const { stores, dailyResults } = await getDataSnapshot({ force });
+    const { stores, dailyResults, resultsByStore } = await getDataSnapshot({ force });
     const store = stores.find((item) => item.code === req.session.code);
 
     if (!store) {
@@ -1240,7 +1272,7 @@ app.get("/api/dashboard", authenticate, requireRole("store"), async (req, res) =
       return jsonError(res, 404, "Điểm bán không còn tồn tại trên hệ thống.");
     }
 
-    return res.json(buildDashboardForStore(store, dailyResults));
+    return res.json(buildDashboardForStore(store, dailyResults, resultsByStore));
   } catch (error) {
     console.error("Dashboard error:", error);
     return jsonError(res, 500, error.message || "Không thể tải dashboard.");
@@ -1255,13 +1287,41 @@ app.post("/api/auth/logout", authenticate, (req, res) => {
 app.get("/api/admin/dashboard", authenticate, requireRole("admin"), async (req, res) => {
   try {
     const force = req.query.refresh === "1";
-    const { stores, dailyResults } = await getDataSnapshot({ force });
-    return res.json(
-      buildAdminDashboard(stores, dailyResults, req.session, {
-        page: req.query.page,
-        pageSize: req.query.pageSize
-      })
-    );
+    const page = req.query.page;
+    const pageSize = req.query.pageSize;
+    const { stores, dailyResults, resultsByStore } = await getDataSnapshot({ force });
+
+    // Cache the expensive computation (all store dashboards)
+    if (!adminDashboardCache || force) {
+      const built = buildAdminDashboard(stores, dailyResults, req.session, { page, pageSize }, resultsByStore);
+      const { _storeDashboards, ...response } = built;
+      adminDashboardCache = {
+        storeDashboards: _storeDashboards,
+        overview: response,
+        expiresAt: Date.now() + sheetsCacheTtlMs
+      };
+      return res.json(response);
+    }
+
+    if (adminDashboardCache.expiresAt > Date.now()) {
+      // Re-paginate from cached storeDashboards
+      const repaged = {
+        ...adminDashboardCache.overview,
+        storesPage: buildAdminStoresPage(adminDashboardCache.storeDashboards, { page, pageSize })
+      };
+      return res.json(repaged);
+    }
+
+    // Cache expired
+    adminDashboardCache = null;
+    const built = buildAdminDashboard(stores, dailyResults, req.session, { page, pageSize }, resultsByStore);
+    const { _storeDashboards, ...response } = built;
+    adminDashboardCache = {
+      storeDashboards: _storeDashboards,
+      overview: response,
+      expiresAt: Date.now() + sheetsCacheTtlMs
+    };
+    return res.json(response);
   } catch (error) {
     console.error("Admin dashboard error:", error);
     return jsonError(res, 500, error.message || "Không thể tải dashboard quản trị.");
@@ -1280,7 +1340,7 @@ app.get("/api/admin/stores", authenticate, requireRole("admin"), async (req, res
       : [];
 
     const storeDashboards = matchingStores
-      .map((store) => buildDashboardForStore(store, dailyResults))
+      .map((store) => buildDashboardForStore(store, dailyResults, resultsByStore))
       .sort((left, right) => left.store.code.localeCompare(right.store.code));
 
     return res.json(
@@ -1306,8 +1366,8 @@ app.get("/api/admin/store", authenticate, requireRole("admin"), async (req, res)
       return jsonError(res, 400, "Vui lòng nhập mã điểm bán.");
     }
 
-    const { stores, dailyResults } = await getDataSnapshot({ force });
-    const detail = buildAdminStoreDetail(stores, dailyResults, code);
+    const { stores, dailyResults, resultsByStore } = await getDataSnapshot({ force });
+    const detail = buildAdminStoreDetail(stores, dailyResults, code, resultsByStore);
     if (!detail) {
       return jsonError(res, 404, "Điểm bán không còn tồn tại trên hệ thống.");
     }
@@ -1322,8 +1382,8 @@ app.get("/api/admin/store", authenticate, requireRole("admin"), async (req, res)
 app.get("/api/admin/export", authenticate, requireRole("admin"), async (req, res) => {
   try {
     const force = req.query.refresh === "1";
-    const { stores, dailyResults } = await getDataSnapshot({ force });
-    const adminDashboard = buildAdminExportData(stores, dailyResults, req.session);
+    const { stores, dailyResults, resultsByStore } = await getDataSnapshot({ force });
+    const adminDashboard = buildAdminExportData(stores, dailyResults, req.session, resultsByStore);
     const workbook = buildAdminExportWorkbook(adminDashboard);
     const buffer = XLSX.write(workbook, {
       type: "buffer",

@@ -980,6 +980,7 @@ function showAdminStorePromptMsg(msg) {
 }
 
 function renderAdminDashboard(data) {
+  if (!data || !data.summary) return;
   latestAdminDashboard = data;
 
   if (data.storesPage?.pagination) {
@@ -988,8 +989,8 @@ function renderAdminDashboard(data) {
     adminPageSizeSelect.value = String(adminPageSize);
   }
 
-  adminNameEl.textContent = data.admin.name || t("defaultAdminName");
-  adminMeta.textContent = [data.admin.username, t("updatedAt", { value: formatTimestamp(data.updatedAt) })].join(" • ");
+  adminNameEl.textContent = data.admin?.name || t("defaultAdminName");
+  adminMeta.textContent = [data.admin?.username || "", t("updatedAt", { value: formatTimestamp(data.updatedAt) })].filter(Boolean).join(" • ");
 
   const [year, month] = (data.summary.monthKey || "").split("-");
   adminTotalReward.textContent = formatCurrency(data.summary.totalReward);
@@ -1009,12 +1010,12 @@ function renderAdminDashboard(data) {
   });
 
   adminAggregateCategoriesGrid.innerHTML = "";
-  data.aggregateCategories.forEach((cat, i) => adminAggregateCategoriesGrid.appendChild(buildAggregateCategoryCard(cat, i)));
+  (data.aggregateCategories || []).forEach((cat, i) => adminAggregateCategoriesGrid.appendChild(buildAggregateCategoryCard(cat, i)));
 
   adminAggregateLevelsGrid.innerHTML = "";
-  data.aggregateLevels.forEach((lv, i) => adminAggregateLevelsGrid.appendChild(buildAggregateLevelCard(lv, i)));
+  (data.aggregateLevels || []).forEach((lv, i) => adminAggregateLevelsGrid.appendChild(buildAggregateLevelCard(lv, i)));
 
-  renderAdminTable(data.storesPage);
+  if (data.storesPage) renderAdminTable(data.storesPage);
 
   if (!adminStoreQuery.trim()) showAdminStorePromptMsg();
 }
@@ -1179,11 +1180,16 @@ loginForm.addEventListener("submit", async (e) => {
       adminCurrentPage = 1;
       adminStoreQuery = "";
       storeSearchInput.value = "";
-      renderAdminDashboard(data.adminDashboard);
+      // Show admin app immediately with loading state, then fetch dashboard async
       showAdminApp();
-    } else {
+      showToast(t("loginLoading"), "info", 3000);
+      loadAdminDashboard(true);
+    } else if (data.dashboard) {
       renderStoreDashboard(data.dashboard);
       showStoreApp();
+    } else {
+      showStoreApp();
+      loadStoreDashboard(true);
     }
   } catch (err) {
     clearSession();
