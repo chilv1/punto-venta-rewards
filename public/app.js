@@ -1104,13 +1104,21 @@ async function loadAdminStoreDetail(code, forceRefresh = false) {
 async function loadAdminStoreSearch(forceRefresh = false) {
   const q = adminStoreQuery.trim().toUpperCase();
   if (!q) { selectedAdminStoreCode = ""; storeSelector.innerHTML = ""; showAdminStorePromptMsg(); return; }
+  showAdminStorePromptMsg(t("adminStoreSearchLoading"));
   try {
     const params = new URLSearchParams({ query: q, page: "1", pageSize: String(adminPageSize) });
     if (forceRefresh) { params.set("refresh", "1"); params.set("t", String(Date.now())); }
     const data = await apiFetch(`/api/admin/stores?${params}`);
     populateStoreSelector(data.items || []);
     if (data.items?.length) {
-      await loadAdminStoreDetail(selectedAdminStoreCode, forceRefresh);
+      // Use firstDetail from search response to avoid a second API call
+      if (data.firstDetail) {
+        selectedAdminStoreCode = data.firstDetail.store.code;
+        adminStoreDetail.innerHTML = "";
+        adminStoreDetail.appendChild(createStoreDetailView(data.firstDetail));
+      } else {
+        await loadAdminStoreDetail(selectedAdminStoreCode, forceRefresh);
+      }
     } else {
       showAdminStorePromptMsg(t("adminNoStoreMatch"));
     }

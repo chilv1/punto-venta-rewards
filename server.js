@@ -960,10 +960,14 @@ function buildAdminStoreSearch(storeDashboards, options = {}) {
   const storeItems = filtered.map(buildStoreDashboardSummary);
   const { items, pagination } = paginateItems(storeItems, page, pageSize);
 
+  // Include the first matching store's full detail to avoid a second API call
+  const firstDetail = filtered.length > 0 ? filtered[0] : null;
+
   return {
     query,
     items,
-    pagination
+    pagination,
+    firstDetail
   };
 }
 
@@ -1267,8 +1271,15 @@ app.get("/api/admin/dashboard", authenticate, requireRole("admin"), async (req, 
 app.get("/api/admin/stores", authenticate, requireRole("admin"), async (req, res) => {
   try {
     const force = req.query.refresh === "1";
+    const query = String(req.query.query || "").trim().toUpperCase();
     const { stores, dailyResults } = await getDataSnapshot({ force });
-    const storeDashboards = stores
+
+    // Filter stores FIRST by code, then only build dashboards for matching stores
+    const matchingStores = query
+      ? stores.filter((store) => store.code.toUpperCase().includes(query))
+      : [];
+
+    const storeDashboards = matchingStores
       .map((store) => buildDashboardForStore(store, dailyResults))
       .sort((left, right) => left.store.code.localeCompare(right.store.code));
 
