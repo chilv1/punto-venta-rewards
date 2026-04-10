@@ -1008,8 +1008,11 @@ function buildAdminDashboard(stores, dailyResults, admin, options = {}, resultsB
     .map((store) => buildDashboardForStore(store, dailyResults, resultsByStore))
     .sort((left, right) => left.store.code.localeCompare(right.store.code));
 
+  const allStoreItems = storeDashboards.map(buildStoreDashboardSummary);
+
   return {
     ...buildAdminOverview(storeDashboards, admin),
+    allStoreItems,
     storesPage: buildAdminStoresPage(storeDashboards, options),
     _storeDashboards: storeDashboards
   };

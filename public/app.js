@@ -17,6 +17,7 @@ let activeAdminTab = "adminOverviewTab";
 let adminCurrentPage = 1;
 let adminPageSize = 20;
 let selectedAdminStoreCode = "";
+let cachedAllStoreItems = null;
 
 /* ---------- 2. DOM References ---------- */
 const $ = (id) => document.getElementById(id);
@@ -983,6 +984,11 @@ function renderAdminDashboard(data) {
   if (!data || !data.summary) return;
   latestAdminDashboard = data;
 
+  // Cache all store items for client-side pagination
+  if (data.allStoreItems) {
+    cachedAllStoreItems = data.allStoreItems;
+  }
+
   if (data.storesPage?.pagination) {
     adminCurrentPage = data.storesPage.pagination.page;
     adminPageSize = data.storesPage.pagination.pageSize;
@@ -1018,6 +1024,20 @@ function renderAdminDashboard(data) {
   if (data.storesPage) renderAdminTable(data.storesPage);
 
   if (!adminStoreQuery.trim()) showAdminStorePromptMsg();
+}
+
+// Client-side pagination from cached store items
+function paginateLocally() {
+  if (!cachedAllStoreItems) return;
+  const totalItems = cachedAllStoreItems.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / adminPageSize));
+  adminCurrentPage = Math.min(Math.max(adminCurrentPage, 1), totalPages);
+  const startIndex = (adminCurrentPage - 1) * adminPageSize;
+  const items = cachedAllStoreItems.slice(startIndex, startIndex + adminPageSize);
+  renderAdminTable({
+    items,
+    pagination: { page: adminCurrentPage, pageSize: adminPageSize, totalItems, totalPages, startIndex }
+  });
 }
 
 /* ---------- 14. API Functions ---------- */
@@ -1224,17 +1244,32 @@ storeSearchInput.addEventListener("input", () => {
 adminPageSizeSelect.addEventListener("change", () => {
   adminPageSize = Number(adminPageSizeSelect.value || 20);
   adminCurrentPage = 1;
-  if (latestAdminDashboard) loadAdminDashboard();
+  if (cachedAllStoreItems) {
+    paginateLocally();
+  } else if (latestAdminDashboard) {
+    loadAdminDashboard();
+  }
   if (adminStoreQuery.trim()) loadAdminStoreSearch();
 });
 
 adminPrevPageBtn.addEventListener("click", () => {
-  if (adminCurrentPage > 1) { adminCurrentPage--; if (latestAdminDashboard) loadAdminDashboard(); }
+  if (adminCurrentPage > 1) {
+    adminCurrentPage--;
+    if (cachedAllStoreItems) {
+      paginateLocally();
+    } else if (latestAdminDashboard) {
+      loadAdminDashboard();
+    }
+  }
 });
 
 adminNextPageBtn.addEventListener("click", () => {
   adminCurrentPage++;
-  if (latestAdminDashboard) loadAdminDashboard();
+  if (cachedAllStoreItems) {
+    paginateLocally();
+  } else if (latestAdminDashboard) {
+    loadAdminDashboard();
+  }
 });
 
 // Language buttons — all pairs
