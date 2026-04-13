@@ -89,12 +89,25 @@
         </div>
 
         <div id="storeContent" class="content-area">
+          <!-- Announcements Banner -->
+          <div id="storeAnnouncements" class="announcement-banner hidden">
+            <div id="annCarousel" class="ann-carousel"></div>
+            <div id="annDots" class="ann-dots"></div>
+            <button id="annDismissBtn" class="ann-dismiss-btn" type="button" aria-label="Cerrar anuncio">×</button>
+          </div>
+          
           <!-- Tab: Home -->
           <div id="storeHomeTab" class="tab-panel active">
+            <!-- Nudge Banner -->
+            <div id="nudgeBanner" class="nudge-banner hidden">
+                <p id="nudgeText"></p>
+            </div>
+
             <div class="hero-reward">
               <span id="totalRewardLabel" class="hero-label">Premio total del mes</span>
               <strong id="totalReward" class="hero-amount">S/ 0</strong>
               <p id="totalRewardMeta" class="hero-meta"></p>
+              <button id="openSimulatorBtn" class="btn-secondary" style="margin-top:12px; font-size:14px; width:auto; display:inline-block">🧮 Simulador</button>
             </div>
 
             <div class="quick-stats">
@@ -129,8 +142,32 @@
               <div id="historyGrid" class="history-chart"></div>
             </div>
 
+            <div class="section-block" id="leaderboardSection" style="display:none">
+              <h3 class="section-title">Ranking Regional</h3>
+              <p class="section-text" id="leaderboardMeta"></p>
+              <div id="leaderboardGrid" class="leaderboard-list"></div>
+            </div>
+
             <p id="updatedAt" class="updated-text"></p>
             <p id="dashboardStatus" class="status-msg"></p>
+          </div>
+
+          <!-- Simulator Modal -->
+          <div id="simulatorModal" class="modal-overlay hidden">
+             <div class="modal-content">
+                <div class="modal-header">
+                   <h3>Calculadora Simulador</h3>
+                   <button id="closeSimulatorBtn" class="btn-icon">×</button>
+                </div>
+                <div class="modal-body">
+                   <p>Ingresa líneas adicionales para simular cuánto premio podrías ganar.</p>
+                   <div id="simulatorInputs" class="simulator-inputs"></div>
+                   <div class="simulator-result">
+                      <span>Premio proyectado:</span>
+                      <strong id="simulatorTotalReward">S/ 0</strong>
+                   </div>
+                </div>
+             </div>
           </div>
 
           <!-- Tab: Levels -->
@@ -318,6 +355,105 @@
             </div>
           </div>
 
+          <!-- Tab: Announcements (Admin) -->
+          <div id="adminAnnouncementsTab" class="tab-panel">
+            <div class="section-block">
+              <h3 id="adminAnnouncementSectionTitle" class="section-title">Novedades y Anuncios</h3>
+              <p id="adminAnnouncementSectionText" class="section-text">Publica mensajes para los puntos de venta. Puedes segmentar por zona o punto específico.</p>
+
+              <form id="adminAnnouncementForm" class="announcement-form" style="margin-top:16px;" novalidate>
+                <!-- Tipo -->
+                <div class="form-group">
+                  <label id="annTypeLabel">Tipo de anuncio</label>
+                  <div id="annTypeSelector" class="ann-type-selector">
+                    <button type="button" class="ann-type-btn active" data-type="info" data-emoji="📢">📢 Info</button>
+                    <button type="button" class="ann-type-btn" data-type="promo" data-emoji="🎉">🎉 Promo</button>
+                    <button type="button" class="ann-type-btn" data-type="alert" data-emoji="⚠️">⚠️ Alerta</button>
+                    <button type="button" class="ann-type-btn" data-type="urgent" data-emoji="🚨">🚨 Urgente</button>
+                    <button type="button" class="ann-type-btn" data-type="success" data-emoji="🏆">🏆 Logro</button>
+                  </div>
+                  <p id="annTypeError" class="field-error hidden"></p>
+                </div>
+
+                <!-- Título -->
+                <div class="form-group">
+                  <label id="annTitleLabel" for="annTitleInput">Título</label>
+                  <input type="text" id="annTitleInput" required maxlength="80"
+                         placeholder="Ej: ¡Doble de ventas este fin de semana!">
+                  <p id="annTitleError" class="field-error hidden"></p>
+                </div>
+
+                <!-- Mensaje -->
+                <div class="form-group">
+                  <label for="annMessageInput"><span id="annMessageLabel">Mensaje</span> <span id="annCharCount" class="ann-char-count">0/300</span></label>
+                  <textarea id="annMessageInput" required maxlength="300" rows="3"
+                            placeholder="Detalle del anuncio para los puntos de venta..."></textarea>
+                  <p id="annMessageError" class="field-error hidden"></p>
+                </div>
+
+                <!-- Destinatario -->
+                <div class="form-group">
+                  <label id="annTargetLabel" for="annTargetSelect">Destinatario</label>
+                  <select id="annTargetSelect" class="store-select">
+                    <option value="all">Todos los puntos</option>
+                    <option value="area">Por zona</option>
+                    <option value="store">Punto específico</option>
+                  </select>
+                  <p id="annTargetError" class="field-error hidden"></p>
+                </div>
+
+                <!-- Zona (visible si target = area) -->
+                <div class="form-group hidden" id="annAreaGroup">
+                  <label id="annAreaLabel" for="annAreaInput">Zona</label>
+                  <input type="text" id="annAreaInput" list="annAreaSuggestions" placeholder="Ej: Lima Norte">
+                  <datalist id="annAreaSuggestions"></datalist>
+                  <p id="annAreaError" class="field-error hidden"></p>
+                </div>
+
+                <!-- Código punto (visible si target = store) -->
+                <div class="form-group hidden" id="annStoreGroup">
+                  <label id="annStoreCodeLabel" for="annStoreCodeInput">Código del punto</label>
+                  <input type="text" id="annStoreCodeInput" list="annStoreSuggestions" placeholder="CUSPS0001">
+                  <datalist id="annStoreSuggestions"></datalist>
+                  <p id="annStoreCodeError" class="field-error hidden"></p>
+                </div>
+
+                <!-- Fecha expiración -->
+                <div class="form-group">
+                  <label for="annExpiresInput"><span id="annExpiresLabel">Válido hasta</span> <small id="annExpiresOptional" style="color:var(--ink-muted)">(opcional)</small></label>
+                  <input type="date" id="annExpiresInput" class="search-input" style="font-size:14px;">
+                  <p id="annExpiresError" class="field-error hidden"></p>
+                </div>
+
+                <!-- Pin -->
+                <div class="form-group">
+                  <label class="ann-checkbox-row">
+                    <input type="checkbox" id="annPinnedInput">
+                    <span id="annPinnedLabel">📌 Fijar este anuncio (aparece primero siempre)</span>
+                  </label>
+                </div>
+
+                <input type="hidden" id="annEditingId" value="">
+                <p id="annFormStatus" class="form-status"></p>
+
+                <div style="display:flex; gap:8px; margin-top:4px">
+                  <button type="submit" id="annSubmitBtn" class="btn-primary">Publicar</button>
+                  <button type="button" id="annCancelEditBtn" class="btn-secondary hidden">Cancelar</button>
+                </div>
+              </form>
+
+              <div class="ann-toolbar">
+                <div class="form-group ann-toolbar-filter">
+                  <label id="annFilterLabel" for="annFilterSelect">Mostrar</label>
+                  <select id="annFilterSelect" class="store-select"></select>
+                </div>
+                <p id="annListMeta" class="section-text ann-list-meta"></p>
+              </div>
+
+              <div id="adminAnnouncementsGrid" class="announcements-list" style="margin-top:24px; display:flex; flex-direction:column; gap:12px;"></div>
+            </div>
+          </div>
+
           <!-- Tab: Admin More -->
           <div id="adminMoreTab" class="tab-panel">
             <div class="more-panel">
@@ -361,6 +497,10 @@
           <button class="nav-btn" data-tab="adminStoreTab" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             <span id="navAdminStores">Puntos</span>
+          </button>
+          <button class="nav-btn" data-tab="adminAnnouncementsTab" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span id="navAdminAnnouncements">Avisos</span>
           </button>
           <button class="nav-btn" data-tab="adminMoreTab" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>

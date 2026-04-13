@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const path = require("path");
+const fs = require("fs").promises;
 const express = require("express");
 const XLSX = require("xlsx");
 require("dotenv").config();
@@ -137,6 +138,359 @@ const sessions = new Map();
 const sheetCache = new Map();
 let googleTokenCache = null;
 let adminDashboardCache = null;
+
+const ANNOUNCEMENT_TYPES = new Set(["info", "promo", "alert", "urgent", "success"]);
+const ANNOUNCEMENT_TARGETS = new Set(["all", "area", "store"]);
+
+// --- Announcements State ---
+const ANNOUNCEMENTS_FILE = path.join(__dirname, "data", "announcements.json");
+
+function getAnnouncementTimeZoneParts(date, timeZone) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+
+  return Object.fromEntries(
+    formatter
+      .formatToParts(date)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)])
+  );
+}
+
+function getAnnouncementTimeZoneOffsetMs(date, timeZone) {
+  const parts = getAnnouncementTimeZoneParts(date, timeZone);
+  const zonedUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second
+  );
+  const actualUtc = Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    date.getUTCHours(),
+    date.getUTCMinutes(),
+    date.getUTCSeconds()
+  );
+
+  return zonedUtc - actualUtc;
+}
+
+function zonedDateInputToIso(value, timeZone, options = {}) {
+  const match = String(value || "")
+    .trim()
+    .match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const [, yearRaw, monthRaw, dayRaw] = match;
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  const day = Number(dayRaw);
+  const hour = options.endOfDay ? 23 : 0;
+  const minute = options.endOfDay ? 59 : 0;
+  const second = options.endOfDay ? 59 : 0;
+  const millisecond = options.endOfDay ? 999 : 0;
+
+  const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+  const initialOffset = getAnnouncementTimeZoneOffsetMs(utcGuess, timeZone);
+  let timestamp = utcGuess.getTime() - initialOffset;
+  const correctedOffset = getAnnouncementTimeZoneOffsetMs(new Date(timestamp), timeZone);
+
+  if (correctedOffset !== initialOffset) {
+    timestamp = utcGuess.getTime() - correctedOffset;
+  }
+
+  const normalizedParts = getAnnouncementTimeZoneParts(new Date(timestamp), timeZone);
+  if (
+    normalizedParts.year !== year ||
+    normalizedParts.month !== month ||
+    normalizedParts.day !== day
+  ) {
+    return null;
+  }
+
+  return new Date(timestamp).toISOString();
+}
+
+function parseAnnouncementTimestamp(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function normalizeAnnouncementRecord(record = {}) {
+  const createdAt =
+    parseAnnouncementTimestamp(record.createdAt || record.date) || new Date().toISOString();
+  const updatedAt =
+    parseAnnouncementTimestamp(record.updatedAt || record.createdAt || record.date) || createdAt;
+  const type = String(record.type || "info")
+    .trim()
+    .toLowerCase();
+  const target = String(record.target || "all")
+    .trim()
+    .toLowerCase();
+  const normalized = {
+    id: String(record.id || crypto.randomUUID()).trim() || crypto.randomUUID(),
+    title: String(record.title || "").trim(),
+    message: String(record.message || "").trim(),
+    type: ANNOUNCEMENT_TYPES.has(type) ? type : "info",
+    emoji: String(record.emoji || "").trim(),
+    target: ANNOUNCEMENT_TARGETS.has(target) ? target : "all",
+    targetArea: record.targetArea ? String(record.targetArea).trim() : null,
+    targetStore: record.targetStore ? String(record.targetStore).trim().toUpperCase() : null,
+    pinned: Boolean(record.pinned),
+    active: record.active === false ? false : true,
+    expiresAt: parseAnnouncementTimestamp(record.expiresAt),
+    createdAt,
+    updatedAt,
+    createdBy: String(record.createdBy || "ADMIN").trim() || "ADMIN"
+  };
+
+  if (normalized.target !== "area") {
+    normalized.targetArea = null;
+  }
+  if (normalized.target !== "store") {
+    normalized.targetStore = null;
+  }
+
+  return {
+    ...normalized,
+    version: `${normalized.id}:${normalized.updatedAt}`
+  };
+}
+
+function serializeAnnouncementRecord(record) {
+  return {
+    id: record.id,
+    title: record.title,
+    message: record.message,
+    type: record.type,
+    emoji: record.emoji,
+    target: record.target,
+    targetArea: record.targetArea,
+    targetStore: record.targetStore,
+    pinned: Boolean(record.pinned),
+    active: record.active === false ? false : true,
+    expiresAt: record.expiresAt || null,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    createdBy: record.createdBy
+  };
+}
+
+function getAnnouncementUpdatedTime(record) {
+  const value = Date.parse(record.updatedAt || record.createdAt || 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function sortAnnouncements(records) {
+  return [...records].sort(
+    (left, right) =>
+      Number(Boolean(right.pinned)) - Number(Boolean(left.pinned)) ||
+      Number(right.active !== false) - Number(left.active !== false) ||
+      getAnnouncementUpdatedTime(right) - getAnnouncementUpdatedTime(left)
+  );
+}
+
+function isAnnouncementExpired(record, referenceDate = new Date()) {
+  if (!record.expiresAt) {
+    return false;
+  }
+
+  const expiresAt = Date.parse(record.expiresAt);
+  return Number.isFinite(expiresAt) ? expiresAt < referenceDate.getTime() : false;
+}
+
+function getAnnouncementTargetMetadata(stores) {
+  const areas = Array.from(
+    new Set(
+      stores
+        .map((store) => String(store.area || "").trim())
+        .filter(Boolean)
+    )
+  ).sort((left, right) => left.localeCompare(right));
+
+  const storeItems = stores
+    .map((store) => ({
+      code: store.code,
+      name: store.name,
+      area: store.area
+    }))
+    .sort((left, right) => left.code.localeCompare(right.code));
+
+  return {
+    areas,
+    stores: storeItems
+  };
+}
+
+function validateAnnouncementPayload(body, stores, options = {}) {
+  const { existing = null, createdBy = "ADMIN" } = options;
+  const errors = {};
+  const title = String(body?.title ?? existing?.title ?? "")
+    .trim();
+  const message = String(body?.message ?? existing?.message ?? "")
+    .trim();
+  const type = String(body?.type ?? existing?.type ?? "info")
+    .trim()
+    .toLowerCase();
+  const emoji = String(body?.emoji ?? existing?.emoji ?? "")
+    .trim();
+  const target = String(body?.target ?? existing?.target ?? "all")
+    .trim()
+    .toLowerCase();
+  const targetMetadata = getAnnouncementTargetMetadata(stores);
+  const validStoreCodes = new Set(targetMetadata.stores.map((store) => store.code));
+  const validAreas = new Set(targetMetadata.areas);
+  const rawTargetArea = body?.targetArea !== undefined ? body.targetArea : existing?.targetArea;
+  const rawTargetStore = body?.targetStore !== undefined ? body.targetStore : existing?.targetStore;
+  let targetArea = rawTargetArea ? String(rawTargetArea).trim() : null;
+  let targetStore = rawTargetStore ? String(rawTargetStore).trim().toUpperCase() : null;
+
+  if (!title) {
+    errors.title = "Tiêu đề thông báo là bắt buộc.";
+  } else if (title.length > 80) {
+    errors.title = "Tiêu đề thông báo không được vượt quá 80 ký tự.";
+  }
+
+  if (!message) {
+    errors.message = "Nội dung thông báo là bắt buộc.";
+  } else if (message.length > 300) {
+    errors.message = "Nội dung thông báo không được vượt quá 300 ký tự.";
+  }
+
+  if (!ANNOUNCEMENT_TYPES.has(type)) {
+    errors.type = "Loại thông báo không hợp lệ.";
+  }
+
+  if (!ANNOUNCEMENT_TARGETS.has(target)) {
+    errors.target = "Đối tượng nhận thông báo không hợp lệ.";
+  }
+
+  if (target === "area") {
+    if (!targetArea) {
+      errors.targetArea = "Vui lòng chọn khu vực.";
+    } else if (!validAreas.has(targetArea)) {
+      errors.targetArea = "Khu vực không tồn tại trên hệ thống.";
+    }
+    targetStore = null;
+  } else if (target === "store") {
+    if (!targetStore) {
+      errors.targetStore = "Vui lòng chọn điểm bán.";
+    } else if (!validStoreCodes.has(targetStore)) {
+      errors.targetStore = "Điểm bán không tồn tại trên hệ thống.";
+    }
+    targetArea = null;
+  } else {
+    targetArea = null;
+    targetStore = null;
+  }
+
+  let expiresAt = existing?.expiresAt || null;
+  if (body?.expiresAt !== undefined) {
+    const rawExpiresAt = String(body.expiresAt || "").trim();
+    if (!rawExpiresAt) {
+      expiresAt = null;
+    } else {
+      expiresAt = zonedDateInputToIso(rawExpiresAt, timezone, { endOfDay: true });
+      if (!expiresAt) {
+        errors.expiresAt = "Ngày hết hạn không hợp lệ.";
+      } else if (rawExpiresAt < getTodayKey()) {
+        errors.expiresAt = "Ngày hết hạn phải từ hôm nay trở đi.";
+      }
+    }
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { errors, value: null };
+  }
+
+  return {
+    errors: null,
+    value: normalizeAnnouncementRecord({
+      id: existing?.id || crypto.randomUUID(),
+      title,
+      message,
+      type,
+      emoji,
+      target,
+      targetArea,
+      targetStore,
+      pinned: body?.pinned !== undefined ? Boolean(body.pinned) : existing?.pinned || false,
+      active: existing ? (body?.active !== undefined ? Boolean(body.active) : existing.active !== false) : true,
+      expiresAt,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: existing?.createdBy || createdBy
+    })
+  };
+}
+
+async function loadAnnouncements() {
+  try {
+    const data = await fs.readFile(ANNOUNCEMENTS_FILE, "utf-8");
+    const parsed = JSON.parse(data);
+    return sortAnnouncements(
+      (Array.isArray(parsed) ? parsed : []).map((record) => normalizeAnnouncementRecord(record))
+    );
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      const now = new Date().toISOString();
+      return sortAnnouncements([
+        normalizeAnnouncementRecord({
+          id: crypto.randomUUID(),
+          title: "¡Bienvenido a Novedades!",
+          message: "Sigue tus resultados diarios y mantente atento a nuestras promociones.",
+          type: "info",
+          target: "all",
+          pinned: false,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+          createdBy: "SYSTEM"
+        })
+      ]);
+    }
+    return [];
+  }
+}
+async function saveAnnouncements(announcements) {
+  try {
+    const normalized = sortAnnouncements(
+      (Array.isArray(announcements) ? announcements : []).map((record) =>
+        normalizeAnnouncementRecord(record)
+      )
+    ).slice(0, 50);
+    await fs.mkdir(path.dirname(ANNOUNCEMENTS_FILE), { recursive: true });
+    await fs.writeFile(
+      ANNOUNCEMENTS_FILE,
+      JSON.stringify(normalized.map(serializeAnnouncementRecord), null, 2),
+      "utf-8"
+    );
+    return normalized;
+  } catch (err) {
+    console.error("Error saving announcements:", err);
+    throw err;
+  }
+}
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -769,7 +1123,11 @@ function buildDashboardForStore(store, dailyResults, resultsByStore) {
     levels,
     categories,
     history,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    rules: {
+      levels: store.levels,
+      categories: store.targets
+    }
   };
 }
 
@@ -1253,16 +1611,72 @@ app.post("/api/auth/login", async (req, res) => {
       role: "store",
       code: store.code
     });
+    
+    const dashboardPayload = await buildStoreDashboardPayload(store, stores, dailyResults, resultsByStore);
+    
     return res.json({
       token,
       role: "store",
-      dashboard: buildDashboardForStore(store, dailyResults, resultsByStore)
+      dashboard: dashboardPayload
     });
   } catch (error) {
     console.error("Login error:", error);
     return jsonError(res, 500, error.message || "Không thể đăng nhập lúc này.");
   }
 });
+
+async function buildStoreDashboardPayload(store, stores, dailyResults, resultsByStore) {
+  // Ensure admin cache is valid so we have fast access to all store score totals
+  let cachedDashboards;
+  if (adminDashboardCache && adminDashboardCache.expiresAt > Date.now()) {
+      cachedDashboards = adminDashboardCache.storeDashboards;
+  } else {
+      const built = buildAdminDashboard(stores, dailyResults, { username: 'system' }, { page: 1, pageSize: 20 }, resultsByStore);
+      const { _storeDashboards, ...response } = built;
+      adminDashboardCache = {
+          storeDashboards: _storeDashboards,
+          overview: response,
+          expiresAt: Date.now() + sheetsCacheTtlMs
+      };
+      cachedDashboards = _storeDashboards;
+  }
+
+  let leaderboard = null;
+  if (store.area) {
+     const areaDashboards = cachedDashboards.filter(d => d.store.area === store.area);
+     const sortedArea = areaDashboards.sort((a, b) => b.cumulative.total - a.cumulative.total);
+     const top10 = sortedArea.slice(0, 10).map((d, index) => ({
+        rank: index + 1,
+        code: d.store.code,
+        name: d.store.name,
+        total: d.cumulative.total
+     }));
+     const myRank = sortedArea.findIndex(d => d.store.code === store.code) + 1;
+     leaderboard = { top10, myRank, totalStores: sortedArea.length };
+  }
+  
+  const allAnnouncements = await loadAnnouncements();
+  const announcements = allAnnouncements.filter((announcement) => {
+    if (announcement.active === false || isAnnouncementExpired(announcement)) {
+      return false;
+    }
+    if (announcement.target === "area") {
+      return announcement.targetArea === store.area;
+    }
+    if (announcement.target === "store") {
+      return announcement.targetStore === store.code;
+    }
+    return true;
+  });
+
+  const dashboard = buildDashboardForStore(store, dailyResults, resultsByStore);
+
+  return {
+      ...dashboard,
+      announcements,
+      leaderboard
+  };
+}
 
 app.get("/api/dashboard", authenticate, requireRole("store"), async (req, res) => {
   try {
@@ -1275,7 +1689,8 @@ app.get("/api/dashboard", authenticate, requireRole("store"), async (req, res) =
       return jsonError(res, 404, "Điểm bán không còn tồn tại trên hệ thống.");
     }
 
-    return res.json(buildDashboardForStore(store, dailyResults, resultsByStore));
+    const payload = await buildStoreDashboardPayload(store, stores, dailyResults, resultsByStore);
+    return res.json(payload);
   } catch (error) {
     console.error("Dashboard error:", error);
     return jsonError(res, 500, error.message || "Không thể tải dashboard.");
@@ -1405,6 +1820,155 @@ app.get("/api/admin/export", authenticate, requireRole("admin"), async (req, res
   } catch (error) {
     console.error("Admin export error:", error);
     return jsonError(res, 500, error.message || "Không thể xuất file Excel.");
+  }
+});
+
+// --- Announcements API ---
+
+app.get("/api/announcements", async (req, res) => {
+  try {
+    const list = await loadAnnouncements();
+    const storeCode = String(req.query.store || "").trim().toUpperCase();
+    const area = String(req.query.area || "").trim();
+    const filtered = list.filter((announcement) => {
+      if (announcement.active === false || isAnnouncementExpired(announcement)) {
+        return false;
+      }
+      if (announcement.target === "area") {
+        return announcement.targetArea === area;
+      }
+      if (announcement.target === "store") {
+        return announcement.targetStore === storeCode;
+      }
+      return true;
+    });
+    res.json(filtered);
+  } catch (err) {
+    console.error("Announcements error:", err);
+    res.json([]);
+  }
+});
+
+app.get("/api/admin/announcements", authenticate, requireRole("admin"), async (_req, res) => {
+  try {
+    return res.json(await loadAnnouncements());
+  } catch (err) {
+    console.error("Admin announcements error:", err);
+    return jsonError(res, 500, "Không thể tải danh sách thông báo.");
+  }
+});
+
+app.get("/api/admin/announcement-targets", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    const force = req.query.refresh === "1";
+    const { stores } = await getDataSnapshot({ force });
+    return res.json(getAnnouncementTargetMetadata(stores));
+  } catch (err) {
+    console.error("Announcement target metadata error:", err);
+    return jsonError(res, 500, "Không thể tải danh sách điểm bán.");
+  }
+});
+
+app.post("/api/admin/announcements", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    const list = await loadAnnouncements();
+    const { stores } = await getDataSnapshot();
+    const { errors, value } = validateAnnouncementPayload(req.body, stores, {
+      createdBy: req.session.username || "ADMIN"
+    });
+
+    if (errors) {
+      return res.status(400).json({
+        error: "Dữ liệu thông báo không hợp lệ.",
+        fieldErrors: errors
+      });
+    }
+
+    const saved = await saveAnnouncements([value, ...list]);
+    return res.status(201).json(saved.find((record) => record.id === value.id) || value);
+  } catch (err) {
+    console.error("Create announcement error:", err);
+    return jsonError(res, 500, "Không thể lưu thông báo.");
+  }
+});
+
+app.put("/api/admin/announcements/:id", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    const list = await loadAnnouncements();
+    const index = list.findIndex((announcement) => announcement.id === req.params.id);
+
+    if (index === -1) {
+      return jsonError(res, 404, "Thông báo không tồn tại.");
+    }
+
+    const { stores } = await getDataSnapshot();
+    const { errors, value } = validateAnnouncementPayload(req.body, stores, {
+      existing: list[index],
+      createdBy: list[index].createdBy || req.session.username || "ADMIN"
+    });
+
+    if (errors) {
+      return res.status(400).json({
+        error: "Dữ liệu thông báo không hợp lệ.",
+        fieldErrors: errors
+      });
+    }
+
+    const nextList = [...list];
+    nextList[index] = value;
+    const saved = await saveAnnouncements(nextList);
+    return res.json(saved.find((record) => record.id === value.id) || value);
+  } catch (err) {
+    console.error("Update announcement error:", err);
+    return jsonError(res, 500, "Không thể cập nhật thông báo.");
+  }
+});
+
+app.patch("/api/admin/announcements/:id/pin", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    const list = await loadAnnouncements();
+    const index = list.findIndex((announcement) => announcement.id === req.params.id);
+    if (index === -1) return jsonError(res, 404, "Thông báo không tồn tại.");
+    list[index].pinned = !list[index].pinned;
+    list[index].updatedAt = new Date().toISOString();
+    const saved = await saveAnnouncements(list);
+    const item = saved.find((record) => record.id === req.params.id);
+    res.json({ ok: true, pinned: item?.pinned || false, item });
+  } catch (err) {
+    console.error("Toggle announcement pin error:", err);
+    return jsonError(res, 500, "Không thể thay đổi ghim thông báo.");
+  }
+});
+
+app.patch("/api/admin/announcements/:id/toggle", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    const list = await loadAnnouncements();
+    const index = list.findIndex((announcement) => announcement.id === req.params.id);
+    if (index === -1) return jsonError(res, 404, "Thông báo không tồn tại.");
+    list[index].active = list[index].active === false ? true : false;
+    list[index].updatedAt = new Date().toISOString();
+    const saved = await saveAnnouncements(list);
+    const item = saved.find((record) => record.id === req.params.id);
+    res.json({ ok: true, active: item?.active !== false, item });
+  } catch (err) {
+    console.error("Toggle announcement status error:", err);
+    return jsonError(res, 500, "Không thể thay đổi trạng thái thông báo.");
+  }
+});
+
+app.delete("/api/admin/announcements/:id", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    const list = await loadAnnouncements();
+    const id = req.params.id;
+    if (!list.some((announcement) => announcement.id === id)) {
+      return jsonError(res, 404, "Thông báo không tồn tại.");
+    }
+    const filtered = list.filter(a => a.id !== id);
+    await saveAnnouncements(filtered);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Delete announcement error:", err);
+    return jsonError(res, 500, "Không thể xóa thông báo.");
   }
 });
 

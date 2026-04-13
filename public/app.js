@@ -18,6 +18,9 @@ let adminCurrentPage = 1;
 let adminPageSize = 20;
 let selectedAdminStoreCode = "";
 let cachedAllStoreItems = null;
+let latestAdminAnnouncements = [];
+let announcementTargetOptions = { areas: [], stores: [] };
+let adminAnnouncementFilter = "all";
 
 /* ---------- 2. DOM References ---------- */
 const $ = (id) => document.getElementById(id);
@@ -57,6 +60,53 @@ const refreshBtn = $("refreshBtn");
 const logoutBtn = $("logoutBtn");
 const pullIndicator = $("pullIndicator");
 const storeContent = $("storeContent");
+
+/* New Features DOM */
+const storeAnnouncements = $("storeAnnouncements");
+const annCarousel = $("annCarousel");
+const annDots = $("annDots");
+const annDismissBtn = $("annDismissBtn");
+
+/* Simulator & Nudge */
+const nudgeBanner = $("nudgeBanner");
+const nudgeText = $("nudgeText");
+const openSimulatorBtn = $("openSimulatorBtn");
+const closeSimulatorBtn = $("closeSimulatorBtn");
+const simulatorModal = $("simulatorModal");
+const simulatorInputs = $("simulatorInputs");
+const simulatorTotalReward = $("simulatorTotalReward");
+const leaderboardSection = $("leaderboardSection");
+const leaderboardGrid = $("leaderboardGrid");
+const leaderboardMeta = $("leaderboardMeta");
+
+/* Announcement admin */
+const adminAnnouncementForm = $("adminAnnouncementForm");
+const annTitleInput = $("annTitleInput");
+const annMessageInput = $("annMessageInput");
+const annCharCount = $("annCharCount");
+const annTargetSelect = $("annTargetSelect");
+const annAreaGroup = $("annAreaGroup");
+const annAreaInput = $("annAreaInput");
+const annStoreGroup = $("annStoreGroup");
+const annStoreCodeInput = $("annStoreCodeInput");
+const annExpiresInput = $("annExpiresInput");
+const annPinnedInput = $("annPinnedInput");
+const annEditingId = $("annEditingId");
+const annSubmitBtn = $("annSubmitBtn");
+const annCancelEditBtn = $("annCancelEditBtn");
+const adminAnnouncementsGrid = $("adminAnnouncementsGrid");
+const annTypeError = $("annTypeError");
+const annTitleError = $("annTitleError");
+const annMessageError = $("annMessageError");
+const annTargetError = $("annTargetError");
+const annAreaError = $("annAreaError");
+const annStoreCodeError = $("annStoreCodeError");
+const annExpiresError = $("annExpiresError");
+const annFormStatus = $("annFormStatus");
+const annFilterSelect = $("annFilterSelect");
+const annListMeta = $("annListMeta");
+const annAreaSuggestions = $("annAreaSuggestions");
+const annStoreSuggestions = $("annStoreSuggestions");
 
 /* Admin DOM */
 const adminNameEl = $("adminName");
@@ -217,7 +267,91 @@ const translations = {
     moreLangTitle: "Idioma",
     moreLangLabel: "Seleccionar idioma",
     moreActionsTitle: "Acciones",
-    moreInstall: "Instalar app"
+    moreInstall: "Instalar app",
+    navAnnouncements: "Avisos",
+    announcementSectionTitle: "Novedades y Anuncios",
+    announcementSectionText: "Publica mensajes para los puntos de venta. Puedes segmentar por zona o punto específico.",
+    announcementTypeLabel: "Tipo de anuncio",
+    announcementTypeLabels: {
+      info: "Info",
+      promo: "Promo",
+      alert: "Alerta",
+      urgent: "Urgente",
+      success: "Logro"
+    },
+    announcementTypeBadges: {
+      info: "INFO",
+      promo: "PROMO",
+      alert: "ALERTA",
+      urgent: "URGENTE",
+      success: "LOGRO"
+    },
+    announcementTitleLabel: "Título",
+    announcementTitlePlaceholder: "Ej: ¡Doble de ventas este fin de semana!",
+    announcementMessageLabel: "Mensaje",
+    announcementMessagePlaceholder: "Detalle del anuncio para los puntos de venta...",
+    announcementTargetLabel: "Destinatario",
+    announcementTargetOptions: {
+      all: "Todos los puntos",
+      area: "Por zona",
+      store: "Punto específico"
+    },
+    announcementAreaLabel: "Zona",
+    announcementAreaPlaceholder: "Ej: Lima Norte",
+    announcementStoreLabel: "Código del punto",
+    announcementStorePlaceholder: "CUSPS0001",
+    announcementExpiresLabel: "Válido hasta",
+    announcementExpiresOptional: "(opcional)",
+    announcementPinnedLabel: "📌 Fijar este anuncio (aparece primero siempre)",
+    announcementPublish: "Publicar",
+    announcementUpdate: "Guardar cambios",
+    announcementPublishing: "Publicando...",
+    announcementSaving: "Guardando...",
+    announcementCancel: "Cancelar",
+    announcementFilterLabel: "Mostrar",
+    announcementFilters: {
+      all: "Todos",
+      active: "Activos",
+      paused: "Pausados",
+      expired: "Expirados",
+      pinned: "Fijados"
+    },
+    announcementLoading: "Cargando anuncios...",
+    announcementTargetsLoading: "Cargando puntos y zonas...",
+    announcementTargetsError: "No se pudieron cargar los puntos y zonas.",
+    announcementEmpty: "No hay anuncios publicados.",
+    announcementEmptyFiltered: "No hay anuncios para este filtro.",
+    announcementListMeta: ({ shown, total }) => `${shown} de ${total} anuncios`,
+    announcementTargetAllLabel: "Todos",
+    announcementTargetAreaLabel: ({ area }) => `Zona: ${area}`,
+    announcementTargetStoreLabel: ({ code }) => `Punto: ${code}`,
+    announcementNoExpiry: "Sin expiración",
+    announcementExpiry: ({ date }) => `Hasta ${date}`,
+    announcementCreatedMeta: ({ user, date }) => `${user ? `Por ${user} · ` : ""}${date}`,
+    announcementStatusActive: "Activo",
+    announcementStatusPaused: "Pausado",
+    announcementStatusExpired: "Expiró",
+    announcementPinnedStatus: "Fijado",
+    announcementCreateDone: "Anuncio publicado",
+    announcementUpdateDone: "Anuncio actualizado",
+    announcementDeleteDone: "Anuncio eliminado",
+    announcementPinDone: "Anuncio fijado",
+    announcementUnpinDone: "Anuncio desfijado",
+    announcementPauseDone: "Anuncio pausado",
+    announcementActivateDone: "Anuncio activado",
+    announcementDeleteConfirm: "¿Eliminar este anuncio?",
+    announcementPauseConfirm: "¿Pausar este anuncio?",
+    announcementActivateConfirm: "¿Activar este anuncio?",
+    announcementCloseLabel: "Cerrar anuncio",
+    announcementDismissed: "Anuncio oculto.",
+    announcementStoreUpdatedHint: "Las novedades editadas volverán a mostrarse.",
+    announcementFormInvalid: "Revise los campos marcados.",
+    announcementValidationTitleRequired: "Ingrese un título.",
+    announcementValidationMessageRequired: "Ingrese un mensaje.",
+    announcementValidationAreaRequired: "Seleccione una zona.",
+    announcementValidationStoreRequired: "Seleccione un punto de venta.",
+    announcementValidationAreaInvalid: "La zona no existe en la lista actual.",
+    announcementValidationStoreInvalid: "El punto no existe en la lista actual."
   },
   vi: {
     htmlLang: "vi",
@@ -351,7 +485,91 @@ const translations = {
     moreLangTitle: "Ngôn ngữ",
     moreLangLabel: "Chọn ngôn ngữ",
     moreActionsTitle: "Hành động",
-    moreInstall: "Cài app"
+    moreInstall: "Cài app",
+    navAnnouncements: "Thông báo",
+    announcementSectionTitle: "Tin tức và Thông báo",
+    announcementSectionText: "Gửi thông báo cho điểm bán. Có thể nhắm theo khu vực hoặc điểm bán cụ thể.",
+    announcementTypeLabel: "Loại thông báo",
+    announcementTypeLabels: {
+      info: "Info",
+      promo: "Khuyến mãi",
+      alert: "Cảnh báo",
+      urgent: "Khẩn",
+      success: "Thành tích"
+    },
+    announcementTypeBadges: {
+      info: "INFO",
+      promo: "PROMO",
+      alert: "CẢNH BÁO",
+      urgent: "KHẨN",
+      success: "THÀNH TÍCH"
+    },
+    announcementTitleLabel: "Tiêu đề",
+    announcementTitlePlaceholder: "Ví dụ: Cuối tuần này nhân đôi doanh số!",
+    announcementMessageLabel: "Nội dung",
+    announcementMessagePlaceholder: "Nội dung thông báo gửi đến các điểm bán...",
+    announcementTargetLabel: "Đối tượng nhận",
+    announcementTargetOptions: {
+      all: "Tất cả điểm bán",
+      area: "Theo khu vực",
+      store: "Điểm bán cụ thể"
+    },
+    announcementAreaLabel: "Khu vực",
+    announcementAreaPlaceholder: "Ví dụ: Lima Norte",
+    announcementStoreLabel: "Mã điểm bán",
+    announcementStorePlaceholder: "CUSPS0001",
+    announcementExpiresLabel: "Hiệu lực đến",
+    announcementExpiresOptional: "(tuỳ chọn)",
+    announcementPinnedLabel: "📌 Ghim thông báo này (luôn hiện đầu tiên)",
+    announcementPublish: "Đăng thông báo",
+    announcementUpdate: "Lưu thay đổi",
+    announcementPublishing: "Đang đăng...",
+    announcementSaving: "Đang lưu...",
+    announcementCancel: "Huỷ",
+    announcementFilterLabel: "Hiển thị",
+    announcementFilters: {
+      all: "Tất cả",
+      active: "Đang hoạt động",
+      paused: "Đã tạm dừng",
+      expired: "Đã hết hạn",
+      pinned: "Đã ghim"
+    },
+    announcementLoading: "Đang tải thông báo...",
+    announcementTargetsLoading: "Đang tải điểm bán và khu vực...",
+    announcementTargetsError: "Không thể tải danh sách điểm bán và khu vực.",
+    announcementEmpty: "Chưa có thông báo nào.",
+    announcementEmptyFiltered: "Không có thông báo phù hợp bộ lọc.",
+    announcementListMeta: ({ shown, total }) => `${shown}/${total} thông báo`,
+    announcementTargetAllLabel: "Tất cả",
+    announcementTargetAreaLabel: ({ area }) => `Khu vực: ${area}`,
+    announcementTargetStoreLabel: ({ code }) => `Điểm bán: ${code}`,
+    announcementNoExpiry: "Không hết hạn",
+    announcementExpiry: ({ date }) => `Đến ${date}`,
+    announcementCreatedMeta: ({ user, date }) => `${user ? `Bởi ${user} · ` : ""}${date}`,
+    announcementStatusActive: "Đang hoạt động",
+    announcementStatusPaused: "Tạm dừng",
+    announcementStatusExpired: "Đã hết hạn",
+    announcementPinnedStatus: "Đã ghim",
+    announcementCreateDone: "Đã đăng thông báo",
+    announcementUpdateDone: "Đã cập nhật thông báo",
+    announcementDeleteDone: "Đã xoá thông báo",
+    announcementPinDone: "Đã ghim thông báo",
+    announcementUnpinDone: "Đã bỏ ghim thông báo",
+    announcementPauseDone: "Đã tạm dừng thông báo",
+    announcementActivateDone: "Đã kích hoạt thông báo",
+    announcementDeleteConfirm: "Xoá thông báo này?",
+    announcementPauseConfirm: "Tạm dừng thông báo này?",
+    announcementActivateConfirm: "Kích hoạt lại thông báo này?",
+    announcementCloseLabel: "Đóng thông báo",
+    announcementDismissed: "Đã ẩn thông báo.",
+    announcementStoreUpdatedHint: "Thông báo đã chỉnh sửa sẽ hiện lại.",
+    announcementFormInvalid: "Vui lòng kiểm tra các trường đang lỗi.",
+    announcementValidationTitleRequired: "Nhập tiêu đề.",
+    announcementValidationMessageRequired: "Nhập nội dung.",
+    announcementValidationAreaRequired: "Chọn khu vực.",
+    announcementValidationStoreRequired: "Chọn điểm bán.",
+    announcementValidationAreaInvalid: "Khu vực không có trong danh sách hiện tại.",
+    announcementValidationStoreInvalid: "Điểm bán không có trong danh sách hiện tại."
   }
 };
 
@@ -368,7 +586,28 @@ const serverMessageMap = {
   "Không thể xuất file Excel.": { es: "No se pudo exportar.", vi: "Không thể xuất." },
   "Không thể tìm kiếm điểm bán.": { es: "No se pudo buscar.", vi: "Không thể tìm." },
   "Không thể tải chi tiết điểm bán.": { es: "No se pudo cargar detalle.", vi: "Không thể tải chi tiết." },
-  "Vui lòng nhập mã điểm bán.": { es: "Ingrese código.", vi: "Nhập mã điểm bán." }
+  "Vui lòng nhập mã điểm bán.": { es: "Ingrese código.", vi: "Nhập mã điểm bán." },
+  "Không thể tải danh sách thông báo.": { es: "No se pudo cargar anuncios.", vi: "Không thể tải danh sách thông báo." },
+  "Không thể tải danh sách điểm bán.": { es: "No se pudieron cargar puntos y zonas.", vi: "Không thể tải danh sách điểm bán và khu vực." },
+  "Dữ liệu thông báo không hợp lệ.": { es: "Datos de anuncio no válidos.", vi: "Dữ liệu thông báo không hợp lệ." },
+  "Không thể lưu thông báo.": { es: "No se pudo guardar el anuncio.", vi: "Không thể lưu thông báo." },
+  "Không thể cập nhật thông báo.": { es: "No se pudo actualizar el anuncio.", vi: "Không thể cập nhật thông báo." },
+  "Không thể thay đổi ghim thông báo.": { es: "No se pudo cambiar el fijado.", vi: "Không thể thay đổi ghim thông báo." },
+  "Không thể thay đổi trạng thái thông báo.": { es: "No se pudo cambiar el estado.", vi: "Không thể thay đổi trạng thái thông báo." },
+  "Không thể xóa thông báo.": { es: "No se pudo eliminar el anuncio.", vi: "Không thể xóa thông báo." },
+  "Thông báo không tồn tại.": { es: "El anuncio no existe.", vi: "Thông báo không tồn tại." },
+  "Tiêu đề thông báo là bắt buộc.": { es: "El título es obligatorio.", vi: "Tiêu đề thông báo là bắt buộc." },
+  "Tiêu đề thông báo không được vượt quá 80 ký tự.": { es: "El título no puede superar 80 caracteres.", vi: "Tiêu đề thông báo không được vượt quá 80 ký tự." },
+  "Nội dung thông báo là bắt buộc.": { es: "El mensaje es obligatorio.", vi: "Nội dung thông báo là bắt buộc." },
+  "Nội dung thông báo không được vượt quá 300 ký tự.": { es: "El mensaje no puede superar 300 caracteres.", vi: "Nội dung thông báo không được vượt quá 300 ký tự." },
+  "Loại thông báo không hợp lệ.": { es: "El tipo de anuncio no es válido.", vi: "Loại thông báo không hợp lệ." },
+  "Đối tượng nhận thông báo không hợp lệ.": { es: "El destinatario no es válido.", vi: "Đối tượng nhận thông báo không hợp lệ." },
+  "Vui lòng chọn khu vực.": { es: "Seleccione una zona.", vi: "Vui lòng chọn khu vực." },
+  "Khu vực không tồn tại trên hệ thống.": { es: "La zona no existe en el sistema.", vi: "Khu vực không tồn tại trên hệ thống." },
+  "Vui lòng chọn điểm bán.": { es: "Seleccione un punto de venta.", vi: "Vui lòng chọn điểm bán." },
+  "Điểm bán không tồn tại trên hệ thống.": { es: "El punto de venta no existe.", vi: "Điểm bán không tồn tại trên hệ thống." },
+  "Ngày hết hạn không hợp lệ.": { es: "La fecha de vencimiento no es válida.", vi: "Ngày hết hạn không hợp lệ." },
+  "Ngày hết hạn phải từ hôm nay trở đi.": { es: "La fecha de vencimiento debe ser desde hoy.", vi: "Ngày hết hạn phải từ hôm nay trở đi." }
 };
 
 /* ---------- 4. Utility Functions ---------- */
@@ -394,6 +633,26 @@ function getCategoryLabel(id, fallback = "") {
 
 function getShortLabel(id, fallback = "") {
   return translations[currentLanguage].shortNames[id] || fallback;
+}
+
+function getAnnouncementLocaleValue(group, key, fallback = "") {
+  return translations[currentLanguage][group]?.[key] ?? fallback;
+}
+
+function getAnnouncementTypeLabel(type) {
+  return getAnnouncementLocaleValue("announcementTypeLabels", type, type);
+}
+
+function getAnnouncementTypeBadge(type) {
+  return getAnnouncementLocaleValue(
+    "announcementTypeBadges",
+    type,
+    String(type || "").toUpperCase()
+  );
+}
+
+function getAnnouncementFilterOptionLabel(filter) {
+  return getAnnouncementLocaleValue("announcementFilters", filter, filter);
 }
 
 function getLevelLabel(label) {
@@ -431,6 +690,13 @@ function formatTimestamp(dateStr) {
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return "";
   return new Intl.DateTimeFormat(getLocale(), { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }).format(d);
+}
+
+function formatDateOnly(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat(getLocale(), { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
 }
 
 function setTextById(id, value) {
@@ -598,6 +864,7 @@ function applyStaticTranslations() {
   setTextById("navStoreMore", t("navMore"));
   setTextById("navAdminOverview", t("navOverview"));
   setTextById("navAdminStores", t("navStores"));
+  setTextById("navAdminAnnouncements", t("navAnnouncements"));
   setTextById("navAdminMore", t("navMore"));
 
   // More panel
@@ -608,6 +875,43 @@ function applyStaticTranslations() {
   setTextById("adminMoreLangTitle", t("moreLangTitle"));
   setTextById("adminMoreLangLabel", t("moreLangLabel"));
   setTextById("adminMoreActionsTitle", t("moreActionsTitle"));
+
+  // Announcement admin
+  setTextById("adminAnnouncementSectionTitle", t("announcementSectionTitle"));
+  setTextById("adminAnnouncementSectionText", t("announcementSectionText"));
+  setTextById("annTypeLabel", t("announcementTypeLabel"));
+  setTextById("annTitleLabel", t("announcementTitleLabel"));
+  setTextById("annMessageLabel", t("announcementMessageLabel"));
+  setTextById("annTargetLabel", t("announcementTargetLabel"));
+  setTextById("annAreaLabel", t("announcementAreaLabel"));
+  setTextById("annStoreCodeLabel", t("announcementStoreLabel"));
+  setTextById("annExpiresLabel", t("announcementExpiresLabel"));
+  setTextById("annExpiresOptional", t("announcementExpiresOptional"));
+  setTextById("annPinnedLabel", t("announcementPinnedLabel"));
+  setTextById("annFilterLabel", t("announcementFilterLabel"));
+  setTextById("annCancelEditBtn", t("announcementCancel"));
+  if (annTitleInput) annTitleInput.placeholder = t("announcementTitlePlaceholder");
+  if (annMessageInput) annMessageInput.placeholder = t("announcementMessagePlaceholder");
+  if (annAreaInput) annAreaInput.placeholder = t("announcementAreaPlaceholder");
+  if (annStoreCodeInput) annStoreCodeInput.placeholder = t("announcementStorePlaceholder");
+  if (annDismissBtn) annDismissBtn.setAttribute("aria-label", t("announcementCloseLabel"));
+  if (annTypeSelector) {
+    annTypeSelector.querySelectorAll(".ann-type-btn").forEach((btn) => {
+      btn.textContent = `${btn.dataset.emoji || ""} ${getAnnouncementTypeLabel(btn.dataset.type)}`.trim();
+    });
+  }
+  if (annTargetSelect) {
+    annTargetSelect.querySelectorAll("option").forEach((option) => {
+      option.textContent = translations[currentLanguage].announcementTargetOptions?.[option.value] || option.value;
+    });
+  }
+  if (annFilterSelect) {
+    annFilterSelect.innerHTML = ["all", "active", "paused", "expired", "pinned"]
+      .map((filter) => `<option value="${filter}">${getAnnouncementFilterOptionLabel(filter)}</option>`)
+      .join("");
+    annFilterSelect.value = adminAnnouncementFilter;
+  }
+  setAnnouncementFormBusy(false);
 
   syncAllLangButtons();
 
@@ -623,6 +927,9 @@ function applyStaticTranslations() {
     adminStoresCount.textContent = "0";
     adminTodayTotal.textContent = formatCount(0);
     adminCumulativeTotal.textContent = formatCount(0);
+  }
+  if (latestAdminAnnouncements.length > 0 || adminAnnouncementsGrid?.children.length) {
+    renderAdminAnnouncementsList();
   }
 }
 
@@ -864,6 +1171,48 @@ function renderStoreDashboard(data) {
 
   updatedAt.textContent = t("updatedAt", { value: formatTimestamp(data.updatedAt) });
 
+  // 1. Announcements — Carousel
+  if (data.announcements && data.announcements.length > 0) {
+    renderAnnCarousel(data.announcements);
+    storeAnnouncements.classList.remove("hidden");
+  } else {
+    storeAnnouncements.classList.add("hidden");
+    annCarouselStop();
+  }
+
+  // 2. Nudge Banner (Gamification)
+  nudgeBanner.classList.add("hidden");
+  if (data.achievements.nextLevel) {
+    const missingLines = data.achievements.nextLevel.missingRequirements;
+    const isClose = missingLines.some(m => m.remaining > 0 && m.remaining <= 10);
+    if (isClose) {
+      nudgeBanner.classList.remove("hidden");
+      nudgeText.textContent = `¡Faltan muy pocas líneas para el ${getLevelLabel(data.achievements.nextLevel.label)}! Sigue así.`;
+    }
+  }
+
+  // 3. Regional Leaderboard
+  if (data.leaderboard && data.leaderboard.top10) {
+    leaderboardSection.style.display = "block";
+    const { top10, myRank, totalStores } = data.leaderboard;
+    leaderboardMeta.textContent = `Tu Posición: #${myRank} de ${totalStores} puntos en tu zona.`;
+    leaderboardGrid.innerHTML = "";
+    top10.forEach((s) => {
+      const isMe = s.code === data.store.code;
+      const el = document.createElement("div");
+      el.className = `level-card ${isMe ? 'is-reached is-current' : ''}`.trim();
+      el.innerHTML = `
+        <div class="lc-head">
+          <span>#${s.rank} ${s.name} ${isMe ? '(Tú)' : ''}</span>
+          <strong>${formatCount(s.total)} líneas</strong>
+        </div>
+      `;
+      leaderboardGrid.appendChild(el);
+    });
+  } else {
+    leaderboardSection.style.display = "none";
+  }
+
   levelsGrid.innerHTML = "";
   data.levels.forEach((lv, i) => levelsGrid.appendChild(buildLevelCard(lv, i)));
 
@@ -1053,7 +1402,15 @@ async function apiFetch(url, options = {}) {
     }
   });
   const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(localizeServerMessage(data.error || t("unsupportedRequest")));
+  if (!resp.ok) {
+    const error = new Error(localizeServerMessage(data.error || t("unsupportedRequest")));
+    if (data.fieldErrors && typeof data.fieldErrors === "object") {
+      error.fieldErrors = Object.fromEntries(
+        Object.entries(data.fieldErrors).map(([key, value]) => [key, localizeServerMessage(String(value))])
+      );
+    }
+    throw error;
+  }
   return data;
 }
 
@@ -1153,10 +1510,15 @@ async function handleLogout() {
   try { await apiFetch("/api/auth/logout", { method: "POST" }); } catch (_e) { /* ignore */ }
   latestDashboard = null;
   latestAdminDashboard = null;
+  latestAdminAnnouncements = [];
+  announcementTargetOptions = { areas: [], stores: [] };
+  adminAnnouncementFilter = "all";
   selectedAdminStoreCode = "";
   adminStoreQuery = "";
   adminCurrentPage = 1;
   storeSearchInput.value = "";
+  if (adminAnnouncementsGrid) adminAnnouncementsGrid.innerHTML = "";
+  resetAnnForm();
   clearSession();
   showLogin();
   showToast(t("logoutDone"), "success");
@@ -1225,6 +1587,10 @@ logoutBtn.addEventListener("click", handleLogout);
 adminRefreshBtn.addEventListener("click", () => {
   loadAdminDashboard(true);
   if (adminStoreQuery.trim()) loadAdminStoreSearch(true);
+  if (activeAdminTab === "adminAnnouncementsTab") {
+    loadAnnouncementTargets(true);
+    loadAdminAnnouncements(true);
+  }
 });
 adminLogoutBtn.addEventListener("click", handleLogout);
 exportBtn.addEventListener("click", downloadAdminExport);
@@ -1287,6 +1653,699 @@ setupLangBtns("adminMoreLangEsBtn", "adminMoreLangViBtn");
 $("storeLangBtn")?.addEventListener("click", () => setLanguage(currentLanguage === "es" ? "vi" : "es"));
 $("adminLangBtn")?.addEventListener("click", () => setLanguage(currentLanguage === "es" ? "vi" : "es"));
 
+/* ---------- New Features: Simulator, Announcements ---------- */
+
+/* --- Announcement Carousel --- */
+const ANN_TYPE_META = {
+  info:    { border: "#3b82f6", bg: "rgba(59,130,246,0.12)",  color: "#60a5fa" },
+  promo:   { border: "#8b5cf6", bg: "rgba(139,92,246,0.12)", color: "#a78bfa" },
+  alert:   { border: "#f59e0b", bg: "rgba(245,158,11,0.12)", color: "#fbbf24" },
+  urgent:  { border: "#ef4444", bg: "rgba(239,68,68,0.12)",  color: "#f87171" },
+  success: { border: "#10b981", bg: "rgba(16,185,129,0.12)", color: "#34d399" }
+};
+
+let annCurrentSlide = 0;
+let annTotal = 0;
+let annTimer = null;
+let annVisibleItems = [];
+let annDismissedKeys = (() => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("ann-dismissed") || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_error) {
+    return [];
+  }
+})();
+
+function getAnnouncementDismissKey(announcement) {
+  return announcement?.version || `${announcement?.id || ""}:${announcement?.updatedAt || announcement?.createdAt || ""}`;
+}
+
+function isAnnouncementExpiredClient(announcement) {
+  if (!announcement?.expiresAt) {
+    return false;
+  }
+
+  const expiresAt = new Date(announcement.expiresAt);
+  return !Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() < Date.now();
+}
+
+function annCarouselStop() {
+  if (annTimer) { clearInterval(annTimer); annTimer = null; }
+}
+
+function renderAnnCarousel(list) {
+  annCarouselStop();
+  const active = list.filter((announcement) => !annDismissedKeys.includes(getAnnouncementDismissKey(announcement)));
+  annVisibleItems = active;
+  if (!active.length) {
+    annCarousel.innerHTML = "";
+    annDots.innerHTML = "";
+    storeAnnouncements.classList.add("hidden");
+    return;
+  }
+
+  annTotal = active.length;
+  annCurrentSlide = 0;
+
+  // Build slides
+  annCarousel.innerHTML = active.map((a, i) => {
+    const meta = ANN_TYPE_META[a.type] || ANN_TYPE_META.info;
+    const emoji = a.emoji || (a.type === "promo" ? "🎉" : a.type === "alert" ? "⚠️" : a.type === "urgent" ? "🚨" : a.type === "success" ? "🏆" : "📢");
+    return `<div class="ann-slide${i === 0 ? " active" : ""}" style="border-left-color:${meta.border}" data-index="${i}" data-announcement-key="${getAnnouncementDismissKey(a)}">
+      <span class="ann-type-badge" style="background:${meta.bg};color:${meta.color}">${emoji} ${getAnnouncementTypeBadge(a.type)}</span>
+      <div class="ann-slide-body">
+        <strong class="ann-slide-title">${a.title}</strong>
+        <p class="ann-slide-msg">${a.message}</p>
+      </div>
+    </div>`;
+  }).join("");
+
+  // Build dots
+  if (annTotal > 1) {
+    annDots.innerHTML = active.map((_, i) =>
+      `<span class="ann-dot${i === 0 ? " active" : ""}" data-index="${i}"></span>`
+    ).join("");
+    annDots.style.display = "flex";
+    annDots.querySelectorAll(".ann-dot").forEach(dot => {
+      dot.addEventListener("click", () => goToSlide(Number(dot.dataset.index)));
+    });
+  } else {
+    annDots.style.display = "none";
+    annDots.innerHTML = "";
+  }
+
+  // Auto-scroll every 5s
+  if (annTotal > 1) {
+    annTimer = setInterval(() => goToSlide((annCurrentSlide + 1) % annTotal), 5000);
+  }
+}
+
+function goToSlide(index) {
+  const slides = annCarousel.querySelectorAll(".ann-slide");
+  const dots = annDots.querySelectorAll(".ann-dot");
+  slides.forEach((s, i) => s.classList.toggle("active", i === index));
+  dots.forEach((d, i) => d.classList.toggle("active", i === index));
+  annCurrentSlide = index;
+}
+
+if (annDismissBtn) {
+  annDismissBtn.addEventListener("click", () => {
+    const currentAnnouncement = annVisibleItems[annCurrentSlide];
+    if (!currentAnnouncement) {
+      return;
+    }
+    annDismissedKeys = Array.from(new Set([...annDismissedKeys, getAnnouncementDismissKey(currentAnnouncement)]));
+    localStorage.setItem("ann-dismissed", JSON.stringify(annDismissedKeys));
+    renderAnnCarousel(latestDashboard?.announcements || []);
+    if ((latestDashboard?.announcements || []).length > 0) {
+      showToast(t("announcementDismissed"), "success", 1800);
+    }
+  });
+}
+
+/* --- Admin Announcement Form --- */
+
+// Type selector
+const annTypeSelector = $("annTypeSelector");
+if (annTypeSelector) {
+  annTypeSelector.querySelectorAll(".ann-type-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      annTypeSelector.querySelectorAll(".ann-type-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      setAnnouncementFieldError("type", "");
+    });
+  });
+}
+
+// Char counter
+if (annMessageInput) {
+  annMessageInput.addEventListener("input", () => {
+    if (annCharCount) annCharCount.textContent = `${annMessageInput.value.length}/300`;
+    setAnnouncementFieldError("message", "");
+  });
+}
+
+if (annTitleInput) {
+  annTitleInput.addEventListener("input", () => {
+    setAnnouncementFieldError("title", "");
+  });
+}
+
+if (annAreaInput) {
+  annAreaInput.addEventListener("input", () => {
+    setAnnouncementFieldError("targetArea", "");
+  });
+}
+
+if (annStoreCodeInput) {
+  annStoreCodeInput.addEventListener("input", () => {
+    setAnnouncementFieldError("targetStore", "");
+  });
+}
+
+if (annExpiresInput) {
+  annExpiresInput.addEventListener("input", () => {
+    setAnnouncementFieldError("expiresAt", "");
+  });
+}
+
+// Target conditional fields
+if (annTargetSelect) {
+  annTargetSelect.addEventListener("change", () => {
+    updateAnnouncementTargetVisibility();
+    setAnnouncementFieldError("target", "");
+    setAnnouncementFieldError("targetArea", "");
+    setAnnouncementFieldError("targetStore", "");
+  });
+}
+
+if (annFilterSelect) {
+  annFilterSelect.addEventListener("change", () => {
+    adminAnnouncementFilter = annFilterSelect.value || "all";
+    renderAdminAnnouncementsList();
+  });
+}
+
+function setAnnouncementFormStatus(message = "", type = "") {
+  if (!annFormStatus) {
+    return;
+  }
+  annFormStatus.textContent = message;
+  annFormStatus.classList.toggle("is-error", type === "error");
+}
+
+function setAnnouncementFieldError(field, message = "") {
+  const fieldMap = {
+    type: [null, annTypeError],
+    title: [annTitleInput, annTitleError],
+    message: [annMessageInput, annMessageError],
+    target: [annTargetSelect, annTargetError],
+    targetArea: [annAreaInput, annAreaError],
+    targetStore: [annStoreCodeInput, annStoreCodeError],
+    expiresAt: [annExpiresInput, annExpiresError]
+  };
+  const [input, errorEl] = fieldMap[field] || [];
+  if (input) {
+    input.classList.toggle("is-invalid", Boolean(message));
+  }
+  if (errorEl) {
+    errorEl.textContent = message;
+    errorEl.classList.toggle("hidden", !message);
+  }
+}
+
+function clearAnnouncementFieldErrors() {
+  ["type", "title", "message", "target", "targetArea", "targetStore", "expiresAt"].forEach((field) =>
+    setAnnouncementFieldError(field, "")
+  );
+  setAnnouncementFormStatus("");
+}
+
+function updateAnnouncementTargetVisibility() {
+  const target = annTargetSelect?.value || "all";
+  annAreaGroup?.classList.toggle("hidden", target !== "area");
+  annStoreGroup?.classList.toggle("hidden", target !== "store");
+}
+
+function syncAnnouncementTargetSuggestions() {
+  if (annAreaSuggestions) {
+    annAreaSuggestions.innerHTML = announcementTargetOptions.areas
+      .map((area) => `<option value="${area}"></option>`)
+      .join("");
+  }
+
+  if (annStoreSuggestions) {
+    annStoreSuggestions.innerHTML = announcementTargetOptions.stores
+      .map((store) => `<option value="${store.code}" label="${[store.name, store.area].filter(Boolean).join(" • ")}"></option>`)
+      .join("");
+  }
+}
+
+function getAnnouncementCanonicalArea(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const matched = announcementTargetOptions.areas.find(
+    (area) => area.toLowerCase() === raw.toLowerCase()
+  );
+  return matched || raw;
+}
+
+function getAnnouncementCanonicalStore(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw) {
+    return "";
+  }
+
+  const matched = announcementTargetOptions.stores.find((store) => store.code === raw);
+  return matched?.code || raw;
+}
+
+function validateAnnouncementForm() {
+  clearAnnouncementFieldErrors();
+
+  const title = annTitleInput.value.trim();
+  const message = annMessageInput.value.trim();
+  const target = annTargetSelect?.value || "all";
+  const area = getAnnouncementCanonicalArea(annAreaInput?.value || "");
+  const storeCode = getAnnouncementCanonicalStore(annStoreCodeInput?.value || "");
+  const errors = {};
+
+  if (!title) {
+    errors.title = t("announcementValidationTitleRequired");
+  }
+
+  if (!message) {
+    errors.message = t("announcementValidationMessageRequired");
+  }
+
+  if (target === "area") {
+    if (!area) {
+      errors.targetArea = t("announcementValidationAreaRequired");
+    } else if (
+      announcementTargetOptions.areas.length > 0 &&
+      !announcementTargetOptions.areas.some((item) => item.toLowerCase() === area.toLowerCase())
+    ) {
+      errors.targetArea = t("announcementValidationAreaInvalid");
+    }
+  }
+
+  if (target === "store") {
+    if (!storeCode) {
+      errors.targetStore = t("announcementValidationStoreRequired");
+    } else if (
+      announcementTargetOptions.stores.length > 0 &&
+      !announcementTargetOptions.stores.some((store) => store.code === storeCode)
+    ) {
+      errors.targetStore = t("announcementValidationStoreInvalid");
+    }
+  }
+
+  Object.entries(errors).forEach(([field, value]) => setAnnouncementFieldError(field, value));
+  if (Object.keys(errors).length > 0) {
+    setAnnouncementFormStatus(t("announcementFormInvalid"), "error");
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    values: {
+      title,
+      message,
+      type: getSelectedAnnType(),
+      emoji: getSelectedAnnEmoji(),
+      target,
+      targetArea: target === "area" ? area : null,
+      targetStore: target === "store" ? storeCode : null,
+      pinned: annPinnedInput ? annPinnedInput.checked : false,
+      expiresAt: annExpiresInput?.value || null
+    }
+  };
+}
+
+function setAnnouncementFormBusy(isBusy) {
+  if (!annSubmitBtn) {
+    return;
+  }
+
+  annSubmitBtn.disabled = isBusy;
+  const isEditing = Boolean(annEditingId?.value);
+  annSubmitBtn.textContent = isBusy
+    ? t(isEditing ? "announcementSaving" : "announcementPublishing")
+    : t(isEditing ? "announcementUpdate" : "announcementPublish");
+}
+
+async function loadAnnouncementTargets(forceRefresh = false) {
+  try {
+    if (forceRefresh) {
+      setAnnouncementFormStatus(t("announcementTargetsLoading"));
+    }
+    const params = forceRefresh ? `?refresh=1&t=${Date.now()}` : "";
+    const data = await apiFetch(`/api/admin/announcement-targets${params}`);
+    announcementTargetOptions = {
+      areas: Array.isArray(data.areas) ? data.areas : [],
+      stores: Array.isArray(data.stores) ? data.stores : []
+    };
+    syncAnnouncementTargetSuggestions();
+    setAnnouncementFormStatus("");
+  } catch (err) {
+    setAnnouncementFormStatus("", "error");
+    showToast(err.message || t("announcementTargetsError"), "error");
+  }
+}
+
+// Cancel edit
+if (annCancelEditBtn) {
+  annCancelEditBtn.addEventListener("click", () => {
+    resetAnnForm();
+  });
+}
+
+function resetAnnForm() {
+  adminAnnouncementForm.reset();
+  annEditingId.value = "";
+  clearAnnouncementFieldErrors();
+  updateAnnouncementTargetVisibility();
+  annCancelEditBtn.classList.add("hidden");
+  if (annCharCount) annCharCount.textContent = "0/300";
+  if (annTypeSelector) {
+    annTypeSelector.querySelectorAll(".ann-type-btn").forEach((b, i) => b.classList.toggle("active", i === 0));
+  }
+  setAnnouncementFormBusy(false);
+}
+
+function getSelectedAnnType() {
+  if (!annTypeSelector) return "info";
+  const active = annTypeSelector.querySelector(".ann-type-btn.active");
+  return active ? active.dataset.type : "info";
+}
+
+function getSelectedAnnEmoji() {
+  if (!annTypeSelector) return "";
+  const active = annTypeSelector.querySelector(".ann-type-btn.active");
+  return active ? active.dataset.emoji : "";
+}
+
+if (adminAnnouncementForm) {
+  adminAnnouncementForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const validation = validateAnnouncementForm();
+    if (!validation.isValid) return;
+    const editingId = annEditingId ? annEditingId.value : "";
+    setAnnouncementFormBusy(true);
+    try {
+      if (editingId) {
+        await apiFetch("/api/admin/announcements/" + editingId, {
+          method: "PUT",
+          body: JSON.stringify(validation.values)
+        });
+        showToast(t("announcementUpdateDone"), "success");
+      } else {
+        await apiFetch("/api/admin/announcements", {
+          method: "POST",
+          body: JSON.stringify(validation.values)
+        });
+        showToast(t("announcementCreateDone"), "success");
+      }
+      resetAnnForm();
+      await loadAdminAnnouncements();
+    } catch (err) {
+      if (err.fieldErrors) {
+        Object.entries(err.fieldErrors).forEach(([field, value]) => setAnnouncementFieldError(field, value));
+        setAnnouncementFormStatus(err.message || t("announcementFormInvalid"), "error");
+      }
+      showToast(err.message, "error");
+    } finally {
+      setAnnouncementFormBusy(false);
+    }
+  });
+}
+
+function getAnnouncementFilteredList() {
+  switch (adminAnnouncementFilter) {
+    case "active":
+      return latestAdminAnnouncements.filter((announcement) => announcement.active !== false && !isAnnouncementExpiredClient(announcement));
+    case "paused":
+      return latestAdminAnnouncements.filter((announcement) => announcement.active === false);
+    case "expired":
+      return latestAdminAnnouncements.filter((announcement) => isAnnouncementExpiredClient(announcement));
+    case "pinned":
+      return latestAdminAnnouncements.filter((announcement) => announcement.pinned);
+    default:
+      return latestAdminAnnouncements;
+  }
+}
+
+function renderAdminAnnouncementsList() {
+  if (!adminAnnouncementsGrid) {
+    return;
+  }
+
+  const filtered = getAnnouncementFilteredList();
+  if (annListMeta) {
+    annListMeta.textContent = t("announcementListMeta", {
+      shown: filtered.length,
+      total: latestAdminAnnouncements.length
+    });
+  }
+
+  adminAnnouncementsGrid.innerHTML = "";
+  if (!latestAdminAnnouncements.length) {
+    adminAnnouncementsGrid.innerHTML = `<div class="empty-state">${t("announcementEmpty")}</div>`;
+    return;
+  }
+
+  if (!filtered.length) {
+    adminAnnouncementsGrid.innerHTML = `<div class="empty-state">${t("announcementEmptyFiltered")}</div>`;
+    return;
+  }
+
+  filtered.forEach((announcement) => {
+    const meta = ANN_TYPE_META[announcement.type] || ANN_TYPE_META.info;
+    const emoji = announcement.emoji || "📢";
+    const isExpired = isAnnouncementExpiredClient(announcement);
+    const statusBadge = isExpired
+      ? `<span class="ann-status-badge" style="background:rgba(239,68,68,0.15);color:#f87171">🔴 ${t("announcementStatusExpired")}</span>`
+      : announcement.active !== false
+        ? `<span class="ann-status-badge" style="background:rgba(16,185,129,0.15);color:#34d399">✅ ${t("announcementStatusActive")}</span>`
+        : `<span class="ann-status-badge" style="background:rgba(100,100,100,0.15);color:#888">⏸ ${t("announcementStatusPaused")}</span>`;
+    const pinnedBadge = announcement.pinned
+      ? `<span class="ann-status-badge" style="background:rgba(245,158,11,0.15);color:#fbbf24">📌 ${t("announcementPinnedStatus")}</span>`
+      : "";
+    const targetLabel = announcement.target === "area"
+      ? t("announcementTargetAreaLabel", { area: announcement.targetArea || "-" })
+      : announcement.target === "store"
+        ? t("announcementTargetStoreLabel", { code: announcement.targetStore || "-" })
+        : t("announcementTargetAllLabel");
+    const expiryLabel = announcement.expiresAt
+      ? t("announcementExpiry", { date: formatDateOnly(announcement.expiresAt) })
+      : t("announcementNoExpiry");
+    const createdAt = formatTimestamp(announcement.createdAt || announcement.updatedAt);
+
+    const card = document.createElement("div");
+    card.className = "ann-admin-card";
+    card.style.borderLeftColor = meta.border;
+    card.innerHTML = `
+      <div class="ann-admin-top">
+        <div class="ann-admin-badges">
+          <span class="ann-type-badge" style="background:${meta.bg};color:${meta.color}">${emoji} ${getAnnouncementTypeBadge(announcement.type)}</span>
+          ${pinnedBadge}
+          ${statusBadge}
+        </div>
+        <div class="ann-admin-actions">
+          <button class="btn-icon ann-pin-btn" data-id="${announcement.id}" title="${announcement.pinned ? t("announcementUnpinDone") : t("announcementPinDone")}">${announcement.pinned ? "📌" : "📍"}</button>
+          <button class="btn-icon ann-toggle-btn" data-id="${announcement.id}" title="${announcement.active !== false ? t("announcementPauseDone") : t("announcementActivateDone")}">${announcement.active !== false ? "⏸" : "▶️"}</button>
+          <button class="btn-icon ann-edit-btn" data-id="${announcement.id}" title="${t("announcementUpdate")}">✏️</button>
+          <button class="btn-icon ann-del-btn" data-id="${announcement.id}" title="${t("announcementDeleteDone")}">🗑️</button>
+        </div>
+      </div>
+      <strong class="ann-admin-title">${announcement.title}</strong>
+      <p class="ann-admin-msg">${announcement.message}</p>
+      <div class="ann-admin-meta">${targetLabel} · ${expiryLabel}</div>
+      <div class="ann-admin-meta" style="margin-top:2px;opacity:.6">${t("announcementCreatedMeta", { user: announcement.createdBy || "", date: createdAt })}</div>
+    `;
+    adminAnnouncementsGrid.appendChild(card);
+  });
+
+  adminAnnouncementsGrid.querySelectorAll(".ann-del-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (!window.confirm(t("announcementDeleteConfirm"))) {
+        return;
+      }
+      button.disabled = true;
+      try {
+        await apiFetch("/api/admin/announcements/" + button.dataset.id, { method: "DELETE" });
+        showToast(t("announcementDeleteDone"), "success");
+        await loadAdminAnnouncements();
+      } catch (err) {
+        showToast(err.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
+  adminAnnouncementsGrid.querySelectorAll(".ann-pin-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        const result = await apiFetch("/api/admin/announcements/" + button.dataset.id + "/pin", { method: "PATCH" });
+        showToast(result.pinned ? t("announcementPinDone") : t("announcementUnpinDone"), "success");
+        await loadAdminAnnouncements();
+      } catch (err) {
+        showToast(err.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
+  adminAnnouncementsGrid.querySelectorAll(".ann-toggle-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const announcement = latestAdminAnnouncements.find((item) => item.id === button.dataset.id);
+      const confirmMessage = announcement?.active !== false
+        ? t("announcementPauseConfirm")
+        : t("announcementActivateConfirm");
+      if (!window.confirm(confirmMessage)) {
+        return;
+      }
+      button.disabled = true;
+      try {
+        const result = await apiFetch("/api/admin/announcements/" + button.dataset.id + "/toggle", { method: "PATCH" });
+        showToast(result.active ? t("announcementActivateDone") : t("announcementPauseDone"), "success");
+        await loadAdminAnnouncements();
+      } catch (err) {
+        showToast(err.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
+  adminAnnouncementsGrid.querySelectorAll(".ann-edit-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const announcement = latestAdminAnnouncements.find((item) => item.id === button.dataset.id);
+      if (!announcement) {
+        return;
+      }
+      editAnnouncement(announcement);
+    });
+  });
+}
+
+async function loadAdminAnnouncements(forceRefresh = false) {
+  try {
+    adminAnnouncementsGrid.innerHTML = `<div class="empty-state">${t("announcementLoading")}</div>`;
+    if (annListMeta) annListMeta.textContent = t("announcementListMeta", { shown: 0, total: 0 });
+    const params = forceRefresh ? `?refresh=1&t=${Date.now()}` : "";
+    latestAdminAnnouncements = await apiFetch(`/api/admin/announcements${params}`);
+    renderAdminAnnouncementsList();
+  } catch (err) {
+    latestAdminAnnouncements = [];
+    if (annListMeta) annListMeta.textContent = t("announcementListMeta", { shown: 0, total: 0 });
+    adminAnnouncementsGrid.innerHTML = `<div class="empty-state">${err.message || t("announcementEmpty")}</div>`;
+  }
+}
+
+function editAnnouncement(ann) {
+  annTitleInput.value = ann.title || "";
+  annMessageInput.value = ann.message || "";
+  if (annCharCount) annCharCount.textContent = `${annMessageInput.value.length}/300`;
+  if (annAreaInput) annAreaInput.value = "";
+  if (annStoreCodeInput) annStoreCodeInput.value = "";
+  if (annTargetSelect) {
+    annTargetSelect.value = ann.target || "all";
+    if (ann.target === "area" && annAreaInput) annAreaInput.value = ann.targetArea || "";
+    if (ann.target === "store" && annStoreCodeInput) annStoreCodeInput.value = ann.targetStore || "";
+  }
+  if (annExpiresInput) annExpiresInput.value = ann.expiresAt ? ann.expiresAt.substring(0, 10) : "";
+  if (annPinnedInput) annPinnedInput.checked = Boolean(ann.pinned);
+  if (annEditingId) annEditingId.value = ann.id;
+  clearAnnouncementFieldErrors();
+  updateAnnouncementTargetVisibility();
+  if (annTypeSelector) {
+    annTypeSelector.querySelectorAll(".ann-type-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.type === (ann.type || "info"));
+    });
+  }
+  setAnnouncementFormBusy(false);
+  annCancelEditBtn.classList.remove("hidden");
+  adminAnnouncementForm.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// Intercept admin generic nav clicks to load announcements specifically if selected
+document.querySelectorAll("#adminNav .nav-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const tabId = btn.getAttribute("data-tab");
+    if (tabId === "adminAnnouncementsTab") {
+      loadAnnouncementTargets();
+      loadAdminAnnouncements();
+    }
+  });
+});
+
+function renderSimulator() {
+  if (!latestDashboard || !latestDashboard.rules) return;
+  
+  simulatorInputs.innerHTML = "";
+  const { categories, levels } = latestDashboard.rules;
+  const currentCumulatives = {};
+  latestDashboard.categories.forEach(c => {
+    currentCumulatives[c.id] = c.cumulative;
+  });
+
+  // Render inputs for each category
+  latestDashboard.categories.forEach(cat => {
+    const el = document.createElement("div");
+    el.className = "form-group";
+    el.style.marginBottom = "10px";
+    el.innerHTML = `
+      <label style="font-size:12px; color:#a1aab5">${cat.label} (Actual: ${cat.cumulative})</label>
+      <input type="number" min="0" data-cat="${cat.id}" class="sim-input" placeholder="+0 adicionales" style="padding:8px" />
+    `;
+    simulatorInputs.appendChild(el);
+  });
+
+  const calculateSimulator = () => {
+    let projectedCategoryReward = 0;
+    const projectedCumulativeMap = { ...currentCumulatives };
+    
+    // Read inputs
+    document.querySelectorAll(".sim-input").forEach(inp => {
+       const id = inp.getAttribute("data-cat");
+       const add = Number(inp.value) || 0;
+       projectedCumulativeMap[id] += add;
+    });
+
+    // Calc Category Rewards
+    categories.forEach(catRules => {
+       const projVal = projectedCumulativeMap[catRules.id] || 0;
+       if (projVal >= catRules.target && catRules.target > 0) {
+          projectedCategoryReward += catRules.reward;
+       }
+    });
+
+    // Calc Level Rewards
+    let projectedLevelReward = 0;
+    const sortedLevels = [...levels].sort((a,b) => a.order - b.order || a.label.localeCompare(b.label));
+    let achievedLevel = null;
+    
+    for (const lvl of sortedLevels) {
+       let reached = true;
+       // A level is reached if ALL required targets are met
+       for (const req of lvl.requirements) {
+           if ((projectedCumulativeMap[req.id] || 0) < req.target) {
+               reached = false;
+               break;
+           }
+       }
+       if (reached) {
+           achievedLevel = lvl;
+       }
+    }
+    if (achievedLevel) projectedLevelReward = achievedLevel.reward;
+
+    simulatorTotalReward.textContent = formatCurrency(projectedCategoryReward + projectedLevelReward);
+  };
+
+  document.querySelectorAll(".sim-input").forEach(inp => {
+    inp.addEventListener("input", calculateSimulator);
+  });
+  calculateSimulator();
+}
+
+openSimulatorBtn.addEventListener("click", () => {
+    renderSimulator();
+    simulatorModal.classList.remove("hidden");
+});
+
+closeSimulatorBtn.addEventListener("click", () => {
+    simulatorModal.classList.add("hidden");
+});
+
+
 // Install buttons
 const moreInstallBtn = $("moreInstallBtn");
 function handleInstall() {
@@ -1322,6 +2381,10 @@ if ("serviceWorker" in navigator) {
 }
 
 /* ---------- 20. Init ---------- */
+if (adminAnnouncementForm) {
+  resetAnnForm();
+}
+updateAnnouncementTargetVisibility();
 applyStaticTranslations();
 
 if (getToken()) {

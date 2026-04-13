@@ -1637,3 +1637,309 @@ input, select { font: inherit; }
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* ---------- 22. New Features: Announcements, Simulator, Nudge ---------- */
+
+/* Store Banner */
+.announcement-banner {
+  position: relative;
+  background: rgba(15, 22, 35, 0.95);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 40px 10px 16px;
+  margin-bottom: 20px;
+  margin-top: 0;
+  margin-left: -20px;
+  margin-right: -20px;
+  overflow: hidden;
+}
+.announcement-banner.hidden { display: none; }
+
+/* Carousel */
+.ann-carousel { position: relative; min-height: 48px; }
+.ann-slide {
+  display: none;
+  align-items: flex-start;
+  gap: 10px;
+  border-left: 3px solid #3b82f6;
+  padding-left: 10px;
+  animation: annSlideIn 0.35s ease;
+}
+.ann-slide.active { display: flex; }
+@keyframes annSlideIn {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.ann-slide-body { flex: 1; min-width: 0; }
+.ann-slide-title { display: block; font-size: 13px; font-weight: 700; color: var(--ink); }
+.ann-slide-msg   { margin: 2px 0 0; font-size: 12px; color: var(--ink-muted); line-height: 1.4; }
+
+/* Dots */
+.ann-dots {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 8px;
+}
+.ann-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--line);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+.ann-dot.active { background: var(--accent); transform: scale(1.3); }
+
+/* Dismiss button */
+.ann-dismiss-btn {
+  position: absolute;
+  top: 8px; right: 10px;
+  width: 24px; height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.15s;
+}
+.ann-dismiss-btn:hover { background: var(--surface-hover); }
+
+/* Type badge (used in both carousel and admin cards) */
+.ann-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Status badge (admin card) */
+.ann-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+}
+
+/* Admin announcement card */
+.ann-admin-card {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid #3b82f6;
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.2s;
+}
+.ann-admin-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ann-admin-badges { display: flex; gap: 5px; flex-wrap: wrap; }
+.ann-admin-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.ann-admin-actions .btn-icon:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.ann-admin-title { font-size: 14px; font-weight: 700; color: var(--ink); }
+.ann-admin-msg   { font-size: 13px; color: var(--ink-muted); line-height: 1.5; margin: 0; }
+.ann-admin-meta  { font-size: 11px; color: var(--ink-muted); }
+
+.ann-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.ann-toolbar-filter {
+  flex: 1 1 180px;
+  margin: 0;
+}
+
+.ann-list-meta {
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+/* Admin form — type selector */
+.ann-type-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.ann-type-btn {
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.ann-type-btn.active,
+.ann-type-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Char count */
+.ann-char-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  margin-left: 6px;
+}
+
+/* Checkbox row */
+.ann-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+.ann-checkbox-row input[type="checkbox"] {
+  width: 16px; height: 16px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+/* Textarea override for announcement form */
+#annMessageInput {
+  width: 100%;
+  min-height: 80px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  outline: 0;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+#annMessageInput:focus {
+  border-color: rgba(255, 123, 56, 0.4);
+  box-shadow: 0 0 0 3px rgba(255, 123, 56, 0.1);
+}
+
+.field-error {
+  font-size: 12px;
+  color: var(--danger);
+  margin-top: 6px;
+}
+
+.field-error.hidden {
+  display: none;
+}
+
+input.is-invalid,
+select.is-invalid,
+textarea.is-invalid {
+  border-color: rgba(248, 113, 113, 0.75) !important;
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.12) !important;
+}
+
+.nudge-banner {
+  background: linear-gradient(90deg, rgba(255,59,48,0.15) 0%, rgba(255,149,0,0.15) 100%);
+  border: 1px solid rgba(255,59,48,0.3);
+  border-radius: var(--radius-lg);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  color: #ff9500;
+  font-weight: 600;
+  font-size: 13px;
+  text-align: center;
+  animation: pulseNudge 2s infinite;
+}
+.nudge-banner.hidden { display: none; }
+
+@keyframes pulseNudge {
+  0% { box-shadow: 0 0 0 0 rgba(255, 149, 0, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 149, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 149, 0, 0); }
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.hidden { display: none; }
+.modal-content {
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-header h3 { margin: 0; font-size: 16px; }
+.modal-body { padding: 20px; }
+.modal-body p { margin: 0 0 16px 0; font-size: 13px; color: var(--ink-muted); }
+
+.simulator-result {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.simulator-result span { color: var(--ink-muted); font-size: 14px; }
+.simulator-result strong { color: var(--accent); font-size: 20px; font-family: "Sora", sans-serif; }
+
+.sim-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font-family: inherit;
+}
+.sim-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
