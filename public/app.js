@@ -24,6 +24,12 @@ let adminAnnouncementFilter = "all";
 let pushGateCopyConfig = null;
 let pushGateEditorLanguage = currentLanguage === "vi" ? "vi" : "es";
 let pushGateEditorBusy = false;
+let adminAppConfig = {
+  regionalLeaderboardEnabled: true,
+  updatedAt: null,
+  updatedBy: "SYSTEM"
+};
+let adminAppConfigBusy = false;
 let serviceWorkerRegistrationPromise = null;
 let foregroundPushAnnouncement = null;
 let pendingPushAnnouncementPayload = null;
@@ -207,6 +213,12 @@ const adminLogoutBtn = $("adminLogoutBtn");
 const storeSearchInput = $("storeSearchInput");
 const storeSelector = $("storeSelector");
 const adminStoreDetail = $("adminStoreDetail");
+const adminFeatureConfigForm = $("adminFeatureConfigForm");
+const adminFeatureConfigMeta = $("adminFeatureConfigMeta");
+const adminFeatureConfigStatus = $("adminFeatureConfigStatus");
+const adminFeatureConfigSaveBtn = $("adminFeatureConfigSaveBtn");
+const regionalLeaderboardEnabledInput = $("regionalLeaderboardEnabledInput");
+const regionalLeaderboardStateBadge = $("regionalLeaderboardStateBadge");
 
 /* ---------- 3. Translations ---------- */
 const translations = {
@@ -342,6 +354,21 @@ const translations = {
     navAdminPush: "Push",
     moreLangTitle: "Idioma",
     moreLangLabel: "Seleccionar idioma",
+    adminFeatureConfigTitle: "Funciones",
+    regionalLeaderboardTitle: "Ranking Regional",
+    regionalLeaderboardHint: "Controla si el dashboard de tienda muestra la tabla regional.",
+    regionalLeaderboardToggleLabel: "Mostrar ranking a los puntos de venta",
+    regionalLeaderboardToggleHint: "Cuando esté activo, cada punto verá su top 10 de la zona.",
+    regionalLeaderboardStateOn: "Activo",
+    regionalLeaderboardStateOff: "Oculto",
+    adminFeatureConfigSave: "Guardar cambios",
+    adminFeatureConfigSaving: "Guardando...",
+    adminFeatureConfigLoading: "Cargando configuración...",
+    adminFeatureConfigLoadError: "No se pudo cargar la configuración.",
+    adminFeatureConfigSaveDone: "Configuración guardada.",
+    adminFeatureConfigInvalid: "No se pudo guardar la configuración.",
+    adminFeatureConfigNoUpdates: "Aún no hay cambios manuales en esta configuración.",
+    adminFeatureConfigUpdatedMeta: ({ user, date }) => `Último cambio${user ? ` por ${user}` : ""} · ${date}`,
     pushGroupTitle: "Notificaciones",
     pushStatusUnsupported: "Tu navegador no soporta notificaciones push.",
     pushStatusDisabled: "Las notificaciones push no están activas en el servidor.",
@@ -640,6 +667,21 @@ const translations = {
     navAdminPush: "Push",
     moreLangTitle: "Ngôn ngữ",
     moreLangLabel: "Chọn ngôn ngữ",
+    adminFeatureConfigTitle: "Tính năng",
+    regionalLeaderboardTitle: "Ranking Regional",
+    regionalLeaderboardHint: "Kiểm soát việc dashboard điểm bán có hiển thị bảng xếp hạng khu vực hay không.",
+    regionalLeaderboardToggleLabel: "Hiển thị bảng xếp hạng cho điểm bán",
+    regionalLeaderboardToggleHint: "Khi bật, mỗi điểm bán sẽ thấy top 10 trong khu vực của mình.",
+    regionalLeaderboardStateOn: "Đang bật",
+    regionalLeaderboardStateOff: "Đang ẩn",
+    adminFeatureConfigSave: "Lưu thay đổi",
+    adminFeatureConfigSaving: "Đang lưu...",
+    adminFeatureConfigLoading: "Đang tải cấu hình...",
+    adminFeatureConfigLoadError: "Không thể tải cấu hình.",
+    adminFeatureConfigSaveDone: "Đã lưu cấu hình.",
+    adminFeatureConfigInvalid: "Không thể lưu cấu hình.",
+    adminFeatureConfigNoUpdates: "Chưa có chỉnh sửa thủ công cho cấu hình này.",
+    adminFeatureConfigUpdatedMeta: ({ user, date }) => `Cập nhật gần nhất${user ? ` bởi ${user}` : ""} · ${date}`,
     pushGroupTitle: "Thông báo",
     pushStatusUnsupported: "Trình duyệt này không hỗ trợ push notification.",
     pushStatusDisabled: "Máy chủ chưa bật push notification.",
@@ -848,6 +890,11 @@ const serverMessageMap = {
   "Không thể lưu nội dung popup bật thông báo.": { es: "No se pudo guardar el contenido del popup.", vi: "Không thể lưu nội dung popup." },
   "Dữ liệu popup bật thông báo không hợp lệ.": { es: "El contenido del popup no es válido.", vi: "Dữ liệu popup không hợp lệ." },
   "Ngôn ngữ popup không hợp lệ.": { es: "El idioma del popup no es válido.", vi: "Ngôn ngữ popup không hợp lệ." },
+  "Không thể tải cấu hình ứng dụng.": { es: "No se pudo cargar la configuración.", vi: "Không thể tải cấu hình ứng dụng." },
+  "Không thể lưu cấu hình ứng dụng.": { es: "No se pudo guardar la configuración.", vi: "Không thể lưu cấu hình ứng dụng." },
+  "Dữ liệu cấu hình ứng dụng không hợp lệ.": { es: "La configuración no es válida.", vi: "Dữ liệu cấu hình ứng dụng không hợp lệ." },
+  "Trạng thái hiển thị Ranking Regional là bắt buộc.": { es: "El estado del Ranking Regional es obligatorio.", vi: "Trạng thái hiển thị Ranking Regional là bắt buộc." },
+  "Trạng thái hiển thị Ranking Regional không hợp lệ.": { es: "El estado del Ranking Regional no es válido.", vi: "Trạng thái hiển thị Ranking Regional không hợp lệ." },
   "Push notification chưa được cấu hình trên máy chủ.": { es: "Push no está configurado en el servidor.", vi: "Máy chủ chưa cấu hình push notification." },
   "Subscription push không hợp lệ.": { es: "La suscripción push no es válida.", vi: "Subscription push không hợp lệ." },
   "Không thể lưu đăng ký thông báo.": { es: "No se pudo guardar la suscripción.", vi: "Không thể lưu đăng ký thông báo." },
@@ -1004,6 +1051,31 @@ function applyPushGateCopyConfig(value) {
   renderPushGateEditorMeta();
 }
 
+function createDefaultAdminAppConfig() {
+  return {
+    regionalLeaderboardEnabled: true,
+    updatedAt: null,
+    updatedBy: "SYSTEM"
+  };
+}
+
+function normalizeAdminAppConfig(value) {
+  const defaults = createDefaultAdminAppConfig();
+  return {
+    regionalLeaderboardEnabled:
+      value?.regionalLeaderboardEnabled === undefined
+        ? defaults.regionalLeaderboardEnabled
+        : Boolean(value.regionalLeaderboardEnabled),
+    updatedAt: typeof value?.updatedAt === "string" ? value.updatedAt : defaults.updatedAt,
+    updatedBy: String(value?.updatedBy || defaults.updatedBy).trim() || defaults.updatedBy
+  };
+}
+
+function applyAdminAppConfig(value) {
+  adminAppConfig = normalizeAdminAppConfig(value);
+  renderAdminAppConfigValues();
+}
+
 function getAnnouncementTypeLabel(type) {
   return getAnnouncementLocaleValue("announcementTypeLabels", type, type);
 }
@@ -1117,6 +1189,10 @@ function performLocalSignOut(options = {}) {
   pushGateEditorLanguage = currentLanguage === "vi" ? "vi" : "es";
   setPushGateEditorBusy(false);
   renderPushGateEditorValues();
+  adminAppConfig = createDefaultAdminAppConfig();
+  setAdminAppConfigBusy(false);
+  setAdminAppConfigStatus("");
+  renderAdminAppConfigValues();
   renderStorePushState();
   clearSession();
   authStatus.textContent = "";
@@ -1676,6 +1752,72 @@ function renderPushGateEditorControls() {
   renderPushGateEditorMeta();
 }
 
+function setAdminAppConfigStatus(message = "", type = "") {
+  if (!adminFeatureConfigStatus) {
+    return;
+  }
+  adminFeatureConfigStatus.textContent = message || "";
+  adminFeatureConfigStatus.classList.toggle("is-error", type === "error");
+}
+
+function renderAdminAppConfigMeta() {
+  if (!adminFeatureConfigMeta) {
+    return;
+  }
+  if (!adminAppConfig.updatedAt) {
+    adminFeatureConfigMeta.textContent = t("adminFeatureConfigNoUpdates");
+    return;
+  }
+  adminFeatureConfigMeta.textContent = t("adminFeatureConfigUpdatedMeta", {
+    user: adminAppConfig.updatedBy || "",
+    date: formatTimestamp(adminAppConfig.updatedAt)
+  });
+}
+
+function renderAdminAppConfigControls() {
+  setTextById("adminFeatureConfigTitle", t("adminFeatureConfigTitle"));
+  setTextById("regionalLeaderboardTitle", t("regionalLeaderboardTitle"));
+  setTextById("regionalLeaderboardHint", t("regionalLeaderboardHint"));
+  setTextById("regionalLeaderboardToggleLabel", t("regionalLeaderboardToggleLabel"));
+  setTextById("regionalLeaderboardToggleHint", t("regionalLeaderboardToggleHint"));
+  if (adminFeatureConfigSaveBtn) {
+    adminFeatureConfigSaveBtn.textContent = adminAppConfigBusy
+      ? t("adminFeatureConfigSaving")
+      : t("adminFeatureConfigSave");
+  }
+}
+
+function updateRegionalLeaderboardBadge(isEnabled) {
+  if (!regionalLeaderboardStateBadge) {
+    return;
+  }
+  regionalLeaderboardStateBadge.textContent = isEnabled
+    ? t("regionalLeaderboardStateOn")
+    : t("regionalLeaderboardStateOff");
+  regionalLeaderboardStateBadge.classList.toggle("is-active", Boolean(isEnabled));
+  regionalLeaderboardStateBadge.classList.toggle("is-inactive", !isEnabled);
+}
+
+function renderAdminAppConfigValues() {
+  if (regionalLeaderboardEnabledInput) {
+    regionalLeaderboardEnabledInput.checked = Boolean(adminAppConfig.regionalLeaderboardEnabled);
+  }
+  updateRegionalLeaderboardBadge(Boolean(adminAppConfig.regionalLeaderboardEnabled));
+  renderAdminAppConfigMeta();
+  renderAdminAppConfigControls();
+}
+
+function setAdminAppConfigBusy(isBusy) {
+  adminAppConfigBusy = isBusy;
+  if (regionalLeaderboardEnabledInput) {
+    regionalLeaderboardEnabledInput.disabled = isBusy;
+  }
+  if (adminFeatureConfigSaveBtn) {
+    adminFeatureConfigSaveBtn.disabled = isBusy;
+  }
+  renderAdminAppConfigControls();
+}
+
 function renderPushGateEditorValues() {
   const locale = getPushGateCopyLocale(pushGateEditorLanguage);
   Object.entries(pushGateEditorFields).forEach(([field, input]) => {
@@ -1806,6 +1948,57 @@ async function saveAdminPushGateCopyConfig() {
     showToast(error.message || t("pushGateEditorInvalid"), "error");
   } finally {
     setPushGateEditorBusy(false);
+  }
+}
+
+async function loadAdminAppConfig(options = {}) {
+  const { silent = false } = options;
+  if (getRole() !== "admin" || !getToken()) {
+    return;
+  }
+
+  try {
+    if (!silent) {
+      setAdminAppConfigStatus(t("adminFeatureConfigLoading"));
+    }
+    const data = await apiFetch("/api/admin/app-config");
+    applyAdminAppConfig(data);
+    setAdminAppConfigStatus("");
+  } catch (error) {
+    if (handleSessionError(error, { showNotice: !silent })) {
+      return;
+    }
+    setAdminAppConfigStatus(error.message || t("adminFeatureConfigLoadError"), "error");
+    if (!silent) {
+      showToast(error.message || t("adminFeatureConfigLoadError"), "error");
+    }
+  }
+}
+
+async function saveAdminAppConfig() {
+  if (!regionalLeaderboardEnabledInput) {
+    return;
+  }
+
+  setAdminAppConfigBusy(true);
+  try {
+    const data = await apiFetch("/api/admin/app-config", {
+      method: "PUT",
+      body: JSON.stringify({
+        regionalLeaderboardEnabled: Boolean(regionalLeaderboardEnabledInput.checked)
+      })
+    });
+    applyAdminAppConfig(data);
+    setAdminAppConfigStatus("");
+    showToast(t("adminFeatureConfigSaveDone"), "success");
+  } catch (error) {
+    if (handleSessionError(error)) {
+      return;
+    }
+    setAdminAppConfigStatus(error.message || t("adminFeatureConfigInvalid"), "error");
+    showToast(error.message || t("adminFeatureConfigInvalid"), "error");
+  } finally {
+    setAdminAppConfigBusy(false);
   }
 }
 
@@ -2036,6 +2229,7 @@ function applyStaticTranslations() {
   setTextById("moreInstallText", t("moreInstall"));
   setTextById("adminMoreLangTitle", t("moreLangTitle"));
   setTextById("adminMoreLangLabel", t("moreLangLabel"));
+  renderAdminAppConfigValues();
   setTextById("adminMoreActionsTitle", t("moreActionsTitle"));
   renderPushGateEditorControls();
 
@@ -2769,6 +2963,7 @@ loginForm.addEventListener("submit", async (e) => {
       }
       showAdminApp();
       loadAdminPushGateCopyConfig({ silent: true });
+      loadAdminAppConfig({ silent: true });
       if (!data.dashboard) {
         loadAdminDashboard();
       }
@@ -2828,6 +3023,18 @@ if (pushGateEditorForm) {
     saveAdminPushGateCopyConfig();
   });
 }
+if (adminFeatureConfigForm) {
+  adminFeatureConfigForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveAdminAppConfig();
+  });
+}
+if (regionalLeaderboardEnabledInput) {
+  regionalLeaderboardEnabledInput.addEventListener("change", () => {
+    updateRegionalLeaderboardBadge(Boolean(regionalLeaderboardEnabledInput.checked));
+    setAdminAppConfigStatus("");
+  });
+}
 adminRefreshBtn.addEventListener("click", () => {
   loadAdminDashboard(true);
   if (adminStoreQuery.trim()) loadAdminStoreSearch(true);
@@ -2837,6 +3044,9 @@ adminRefreshBtn.addEventListener("click", () => {
   }
   if (activeAdminTab === "adminPushTab") {
     loadAdminPushGateCopyConfig({ forceRefresh: true });
+  }
+  if (activeAdminTab === "adminMoreTab") {
+    loadAdminAppConfig();
   }
 });
 adminLogoutBtn.addEventListener("click", handleLogout);
@@ -3713,6 +3923,9 @@ document.querySelectorAll("#adminNav .nav-btn").forEach((btn) => {
     if (tabId === "adminPushTab") {
       loadAdminPushGateCopyConfig({ silent: true });
     }
+    if (tabId === "adminMoreTab") {
+      loadAdminAppConfig({ silent: true });
+    }
   });
 });
 
@@ -3896,6 +4109,7 @@ pendingPushAnnouncementRef = readPushAnnouncementRefFromLocation();
 updateAnnouncementTargetVisibility();
 applyStaticTranslations();
 renderPushGateEditorValues();
+renderAdminAppConfigValues();
 
 if (getToken()) {
   if (getRole() === "admin") {
@@ -3903,6 +4117,7 @@ if (getToken()) {
     showAdminApp();
     adminCurrentPage = 1;
     loadAdminPushGateCopyConfig({ silent: true });
+    loadAdminAppConfig({ silent: true });
     loadAdminDashboard();
   } else {
     prepareStoreDashboardLoading();

@@ -151,6 +151,12 @@ const ANNOUNCEMENTS_FILE = path.join(__dirname, "data", "announcements.json");
 const PUSH_SUBSCRIPTIONS_FILE = path.join(__dirname, "data", "push-subscriptions.json");
 const PUSH_VAPID_KEYS_FILE = path.join(__dirname, "data", "push-vapid-keys.json");
 const PUSH_GATE_COPY_FILE = path.join(__dirname, "data", "push-gate-copy.json");
+const APP_CONFIG_FILE = path.join(__dirname, "data", "app-config.json");
+const APP_CONFIG_DEFAULTS = {
+  regionalLeaderboardEnabled: true,
+  updatedAt: null,
+  updatedBy: "SYSTEM"
+};
 const PUSH_GATE_COPY_LANGUAGES = new Set(["es", "vi"]);
 const PUSH_GATE_COPY_FIELDS = [
   "eyebrow",
@@ -676,6 +682,78 @@ async function savePushGateCopyConfig(config) {
   const normalized = normalizePushGateCopyConfig(config);
   await saveJsonFile(PUSH_GATE_COPY_FILE, normalized);
   return normalized;
+}
+
+function normalizeAppConfig(record = {}) {
+  return {
+    regionalLeaderboardEnabled: coerceBoolean(
+      record.regionalLeaderboardEnabled,
+      APP_CONFIG_DEFAULTS.regionalLeaderboardEnabled
+    ),
+    updatedAt: parseAnnouncementTimestamp(record.updatedAt),
+    updatedBy: String(record.updatedBy || APP_CONFIG_DEFAULTS.updatedBy).trim() || APP_CONFIG_DEFAULTS.updatedBy
+  };
+}
+
+async function loadAppConfig() {
+  const parsed = await loadJsonFile(APP_CONFIG_FILE, null);
+  return normalizeAppConfig(parsed || {});
+}
+
+async function saveAppConfig(config) {
+  const normalized = normalizeAppConfig(config);
+  await saveJsonFile(APP_CONFIG_FILE, normalized);
+  return normalized;
+}
+
+function validateBooleanInput(value) {
+  if (typeof value === "boolean") {
+    return { ok: true, value };
+  }
+  if (typeof value === "number") {
+    if (value === 1 || value === 0) {
+      return { ok: true, value: value === 1 };
+    }
+    return { ok: false, value: null };
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) {
+      return { ok: true, value: true };
+    }
+    if (["false", "0", "no", "off"].includes(normalized)) {
+      return { ok: true, value: false };
+    }
+  }
+  return { ok: false, value: null };
+}
+
+function validateAppConfigPayload(body, existingConfig, updatedBy = "ADMIN") {
+  const errors = {};
+  const currentConfig = normalizeAppConfig(existingConfig || {});
+  const hasRegionalLeaderboardEnabled =
+    body && Object.prototype.hasOwnProperty.call(body, "regionalLeaderboardEnabled");
+
+  if (!hasRegionalLeaderboardEnabled) {
+    errors.regionalLeaderboardEnabled = "Trạng thái hiển thị Ranking Regional là bắt buộc.";
+    return { errors, value: null };
+  }
+
+  const parsedRegionalLeaderboard = validateBooleanInput(body.regionalLeaderboardEnabled);
+  if (!parsedRegionalLeaderboard.ok) {
+    errors.regionalLeaderboardEnabled = "Trạng thái hiển thị Ranking Regional không hợp lệ.";
+    return { errors, value: null };
+  }
+
+  return {
+    errors: null,
+    value: normalizeAppConfig({
+      ...currentConfig,
+      regionalLeaderboardEnabled: parsedRegionalLeaderboard.value,
+      updatedAt: new Date().toISOString(),
+      updatedBy: String(updatedBy).trim() || currentConfig.updatedBy || "ADMIN"
+    })
+  };
 }
 
 function validatePushGateCopyLocalePayload(language, body, existingConfig, updatedBy = "ADMIN") {
@@ -2252,7 +2330,10 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 async function buildStoreDashboardPayload(store, stores, dailyResults, resultsByStore) {
-  const leaderboard = buildAreaLeaderboard(stores, resultsByStore, store.area, store.code);
+  const appConfig = await loadAppConfig();
+  const leaderboard = appConfig.regionalLeaderboardEnabled
+    ? buildAreaLeaderboard(stores, resultsByStore, store.area, store.code)
+    : null;
   const allAnnouncements = await loadAnnouncements();
   const announcements = allAnnouncements.filter((announcement) => {
     if (announcement.active === false || isAnnouncementExpired(announcement)) {
@@ -2556,6 +2637,38 @@ app.put("/api/admin/push-gate-copy/:language", authenticate, requireRole("admin"
   } catch (err) {
     console.error("Admin push gate copy save error:", err);
     return jsonError(res, 500, "Không thể lưu nội dung popup bật thông báo.");
+  }
+});
+
+app.get("/api/admin/app-config", authenticate, requireRole("admin"), async (_req, res) => {
+  try {
+    return res.json(await loadAppConfig());
+  } catch (err) {
+    console.error("Admin app config load error:", err);
+    return jsonError(res, 500, "Không thể tải cấu hình ứng dụng.");
+  }
+});
+
+app.put("/api/admin/app-config", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    const currentConfig = await loadAppConfig();
+    const { errors, value } = validateAppConfigPayload(
+      req.body,
+      currentConfig,
+      req.session.username || "ADMIN"
+    );
+
+    if (errors) {
+      return res.status(400).json({
+        error: "Dữ liệu cấu hình ứng dụng không hợp lệ.",
+        fieldErrors: errors
+      });
+    }
+
+    return res.json(await saveAppConfig(value));
+  } catch (err) {
+    console.error("Admin app config save error:", err);
+    return jsonError(res, 500, "Không thể lưu cấu hình ứng dụng.");
   }
 });
 

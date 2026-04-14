@@ -1426,6 +1426,89 @@ input, select { font: inherit; }
   padding: 8px 16px 12px;
 }
 
+.admin-feature-config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.feature-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 0 16px 12px;
+}
+
+.feature-toggle-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feature-toggle-label {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.feature-toggle-hint {
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.feature-toggle-badge {
+  align-self: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.feature-toggle-badge.is-active {
+  border-color: rgba(52, 211, 153, 0.3);
+  color: var(--success);
+  background: rgba(52, 211, 153, 0.08);
+}
+
+.feature-toggle-badge.is-inactive {
+  border-color: rgba(161, 170, 181, 0.18);
+}
+
+.feature-toggle-input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.feature-toggle-input:disabled {
+  cursor: default;
+}
+
+.feature-config-meta,
+.feature-config-status {
+  margin: 0 16px 10px;
+}
+
+.feature-toggle-actions {
+  padding: 0 16px 16px;
+  display: flex;
+}
+
+.feature-toggle-actions .btn-primary {
+  width: auto;
+}
+
 .more-lang-label {
   font-size: 14px;
   color: var(--ink-secondary);
