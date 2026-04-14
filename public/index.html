@@ -201,6 +201,18 @@
                 </div>
               </div>
               <div class="more-group">
+                <p class="more-group-title" id="pushGroupTitle">Notificaciones</p>
+                <div class="more-status">
+                  <p id="pushStatusText" class="more-status-title">Activa las notificaciones para recibir anuncios urgentes.</p>
+                  <p id="pushStatusHint" class="more-status-hint">Recibe anuncios incluso cuando la app esté cerrada.</p>
+                </div>
+                <button id="pushActionBtn" class="more-item" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5"/><path d="M10 17a2 2 0 0 0 4 0"/></svg>
+                  <span class="mi-text" id="pushActionText">Activar notificaciones</span>
+                  <span id="pushActionBadge" class="mi-badge"></span>
+                </button>
+              </div>
+              <div class="more-group">
                 <p class="more-group-title" id="moreActionsTitle">Acciones</p>
                 <button id="refreshBtn" class="more-item" type="button">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -431,6 +443,14 @@
                     <input type="checkbox" id="annPinnedInput">
                     <span id="annPinnedLabel">📌 Fijar este anuncio (aparece primero siempre)</span>
                   </label>
+                </div>
+
+                <div class="form-group">
+                  <label class="ann-checkbox-row">
+                    <input type="checkbox" id="annNotifyPushInput" checked>
+                    <span id="annNotifyPushLabel">🔔 Enviar notificación push ahora</span>
+                  </label>
+                  <p id="annNotifyPushHint" class="section-text" style="margin:8px 0 0;">Se enviará a los dispositivos suscritos del destinatario seleccionado.</p>
                 </div>
 
                 <input type="hidden" id="annEditingId" value="">

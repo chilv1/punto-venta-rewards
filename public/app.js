@@ -21,6 +21,16 @@ let cachedAllStoreItems = null;
 let latestAdminAnnouncements = [];
 let announcementTargetOptions = { areas: [], stores: [] };
 let adminAnnouncementFilter = "all";
+let serviceWorkerRegistrationPromise = null;
+let storePushState = {
+  supported: false,
+  enabled: false,
+  permission: typeof Notification === "undefined" ? "unsupported" : Notification.permission,
+  subscribed: false,
+  busy: false,
+  publicKey: "",
+  storeSubscriptions: 0
+};
 
 /* ---------- 2. DOM References ---------- */
 const $ = (id) => document.getElementById(id);
@@ -60,6 +70,11 @@ const refreshBtn = $("refreshBtn");
 const logoutBtn = $("logoutBtn");
 const pullIndicator = $("pullIndicator");
 const storeContent = $("storeContent");
+const pushStatusText = $("pushStatusText");
+const pushStatusHint = $("pushStatusHint");
+const pushActionBtn = $("pushActionBtn");
+const pushActionText = $("pushActionText");
+const pushActionBadge = $("pushActionBadge");
 
 /* New Features DOM */
 const storeAnnouncements = $("storeAnnouncements");
@@ -91,6 +106,7 @@ const annStoreGroup = $("annStoreGroup");
 const annStoreCodeInput = $("annStoreCodeInput");
 const annExpiresInput = $("annExpiresInput");
 const annPinnedInput = $("annPinnedInput");
+const annNotifyPushInput = $("annNotifyPushInput");
 const annEditingId = $("annEditingId");
 const annSubmitBtn = $("annSubmitBtn");
 const annCancelEditBtn = $("annCancelEditBtn");
@@ -266,6 +282,27 @@ const translations = {
     navStores: "Puntos",
     moreLangTitle: "Idioma",
     moreLangLabel: "Seleccionar idioma",
+    pushGroupTitle: "Notificaciones",
+    pushStatusUnsupported: "Tu navegador no soporta notificaciones push.",
+    pushStatusDisabled: "Las notificaciones push no están activas en el servidor.",
+    pushStatusDefault: "Activa las notificaciones para recibir anuncios urgentes.",
+    pushStatusDenied: "El permiso de notificaciones está bloqueado en este navegador.",
+    pushStatusSubscribed: "Notificaciones activas en este dispositivo.",
+    pushStatusNotSubscribed: "Este dispositivo aún no está suscrito.",
+    pushHintDefault: "Recibe anuncios incluso cuando la app esté cerrada.",
+    pushHintDenied: "Debes habilitar notificaciones en la configuración del navegador.",
+    pushHintSubscribed: ({ count }) => `${count} dispositivo${count === 1 ? "" : "s"} suscrito${count === 1 ? "" : "s"} para este punto.`,
+    pushHintNotSubscribed: "Activa el permiso y sincroniza este dispositivo.",
+    pushActionEnable: "Activar notificaciones",
+    pushActionDisable: "Desactivar notificaciones",
+    pushActionSync: "Sincronizar dispositivo",
+    pushBadgeActive: "Activo",
+    pushBadgeInactive: "Pendiente",
+    pushSubscribing: "Activando notificaciones...",
+    pushUnsubscribing: "Desactivando notificaciones...",
+    pushSubscribedDone: "Notificaciones activadas.",
+    pushUnsubscribedDone: "Notificaciones desactivadas.",
+    pushMessageReceived: "Nuevo anuncio recibido.",
     moreActionsTitle: "Acciones",
     moreInstall: "Instalar app",
     navAnnouncements: "Avisos",
@@ -303,6 +340,8 @@ const translations = {
     announcementExpiresLabel: "Válido hasta",
     announcementExpiresOptional: "(opcional)",
     announcementPinnedLabel: "📌 Fijar este anuncio (aparece primero siempre)",
+    announcementNotifyPushLabel: "🔔 Enviar notificación push ahora",
+    announcementNotifyPushHint: "Se enviará a los dispositivos suscritos del destinatario seleccionado.",
     announcementPublish: "Publicar",
     announcementUpdate: "Guardar cambios",
     announcementPublishing: "Publicando...",
@@ -345,6 +384,10 @@ const translations = {
     announcementCloseLabel: "Cerrar anuncio",
     announcementDismissed: "Anuncio oculto.",
     announcementStoreUpdatedHint: "Las novedades editadas volverán a mostrarse.",
+    announcementPushDisabled: "El anuncio quedó guardado, pero push no está configurado en el servidor.",
+    announcementPushNoSubscribers: "El anuncio quedó guardado. No hay dispositivos suscritos para este destino.",
+    announcementPushSentSummary: ({ sent, matched }) => `Push enviado a ${sent} de ${matched} dispositivo${matched === 1 ? "" : "s"}.`,
+    announcementPushPartialSummary: ({ sent, matched, failed }) => `Push enviado a ${sent}/${matched}. ${failed} fallo${failed === 1 ? "" : "s"}.`,
     announcementFormInvalid: "Revise los campos marcados.",
     announcementValidationTitleRequired: "Ingrese un título.",
     announcementValidationMessageRequired: "Ingrese un mensaje.",
@@ -484,6 +527,27 @@ const translations = {
     navStores: "Điểm bán",
     moreLangTitle: "Ngôn ngữ",
     moreLangLabel: "Chọn ngôn ngữ",
+    pushGroupTitle: "Thông báo",
+    pushStatusUnsupported: "Trình duyệt này không hỗ trợ push notification.",
+    pushStatusDisabled: "Máy chủ chưa bật push notification.",
+    pushStatusDefault: "Bật thông báo để nhận announcement khẩn.",
+    pushStatusDenied: "Quyền thông báo đang bị chặn trên trình duyệt này.",
+    pushStatusSubscribed: "Thiết bị này đã bật thông báo.",
+    pushStatusNotSubscribed: "Thiết bị này chưa đăng ký nhận thông báo.",
+    pushHintDefault: "Bạn vẫn nhận được announcement ngay cả khi app đã đóng.",
+    pushHintDenied: "Cần bật lại quyền thông báo trong cài đặt trình duyệt.",
+    pushHintSubscribed: ({ count }) => `${count} thiết bị đang đăng ký cho điểm bán này.`,
+    pushHintNotSubscribed: "Hãy cấp quyền và đồng bộ thiết bị này.",
+    pushActionEnable: "Bật thông báo",
+    pushActionDisable: "Tắt thông báo",
+    pushActionSync: "Đồng bộ thiết bị",
+    pushBadgeActive: "Đang bật",
+    pushBadgeInactive: "Chưa bật",
+    pushSubscribing: "Đang bật thông báo...",
+    pushUnsubscribing: "Đang tắt thông báo...",
+    pushSubscribedDone: "Đã bật thông báo.",
+    pushUnsubscribedDone: "Đã tắt thông báo.",
+    pushMessageReceived: "Đã nhận thông báo mới.",
     moreActionsTitle: "Hành động",
     moreInstall: "Cài app",
     navAnnouncements: "Thông báo",
@@ -521,6 +585,8 @@ const translations = {
     announcementExpiresLabel: "Hiệu lực đến",
     announcementExpiresOptional: "(tuỳ chọn)",
     announcementPinnedLabel: "📌 Ghim thông báo này (luôn hiện đầu tiên)",
+    announcementNotifyPushLabel: "🔔 Gửi push notification ngay",
+    announcementNotifyPushHint: "Thông báo sẽ được gửi tới các thiết bị đã đăng ký của nhóm nhận đã chọn.",
     announcementPublish: "Đăng thông báo",
     announcementUpdate: "Lưu thay đổi",
     announcementPublishing: "Đang đăng...",
@@ -563,6 +629,10 @@ const translations = {
     announcementCloseLabel: "Đóng thông báo",
     announcementDismissed: "Đã ẩn thông báo.",
     announcementStoreUpdatedHint: "Thông báo đã chỉnh sửa sẽ hiện lại.",
+    announcementPushDisabled: "Thông báo đã lưu nhưng máy chủ chưa cấu hình push.",
+    announcementPushNoSubscribers: "Thông báo đã lưu. Chưa có thiết bị nào đăng ký cho nhóm nhận này.",
+    announcementPushSentSummary: ({ sent, matched }) => `Đã gửi push tới ${sent}/${matched} thiết bị.`,
+    announcementPushPartialSummary: ({ sent, matched, failed }) => `Đã gửi push ${sent}/${matched}. Lỗi ${failed} thiết bị.`,
     announcementFormInvalid: "Vui lòng kiểm tra các trường đang lỗi.",
     announcementValidationTitleRequired: "Nhập tiêu đề.",
     announcementValidationMessageRequired: "Nhập nội dung.",
@@ -607,7 +677,13 @@ const serverMessageMap = {
   "Vui lòng chọn điểm bán.": { es: "Seleccione un punto de venta.", vi: "Vui lòng chọn điểm bán." },
   "Điểm bán không tồn tại trên hệ thống.": { es: "El punto de venta no existe.", vi: "Điểm bán không tồn tại trên hệ thống." },
   "Ngày hết hạn không hợp lệ.": { es: "La fecha de vencimiento no es válida.", vi: "Ngày hết hạn không hợp lệ." },
-  "Ngày hết hạn phải từ hôm nay trở đi.": { es: "La fecha de vencimiento debe ser desde hoy.", vi: "Ngày hết hạn phải từ hôm nay trở đi." }
+  "Ngày hết hạn phải từ hôm nay trở đi.": { es: "La fecha de vencimiento debe ser desde hoy.", vi: "Ngày hết hạn phải từ hôm nay trở đi." },
+  "Không thể tải cấu hình thông báo.": { es: "No se pudo cargar la configuración de notificaciones.", vi: "Không thể tải cấu hình thông báo." },
+  "Push notification chưa được cấu hình trên máy chủ.": { es: "Push no está configurado en el servidor.", vi: "Máy chủ chưa cấu hình push notification." },
+  "Subscription push không hợp lệ.": { es: "La suscripción push no es válida.", vi: "Subscription push không hợp lệ." },
+  "Không thể lưu đăng ký thông báo.": { es: "No se pudo guardar la suscripción.", vi: "Không thể lưu đăng ký thông báo." },
+  "Endpoint push là bắt buộc.": { es: "El endpoint push es obligatorio.", vi: "Endpoint push là bắt buộc." },
+  "Không thể hủy đăng ký thông báo.": { es: "No se pudo cancelar la suscripción.", vi: "Không thể hủy đăng ký thông báo." }
 };
 
 /* ---------- 4. Utility Functions ---------- */
@@ -702,6 +778,308 @@ function formatDateOnly(dateStr) {
 function setTextById(id, value) {
   const el = $(id);
   if (el) el.textContent = value;
+}
+
+function getPushPermissionState() {
+  return typeof Notification === "undefined" ? "unsupported" : Notification.permission;
+}
+
+function isPushSupported() {
+  return Boolean(
+    window.isSecureContext &&
+      "serviceWorker" in navigator &&
+      "PushManager" in window &&
+      "Notification" in window
+  );
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const normalized = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(normalized);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+}
+
+async function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) {
+    return null;
+  }
+
+  if (!serviceWorkerRegistrationPromise) {
+    serviceWorkerRegistrationPromise = navigator.serviceWorker
+      .register("/sw.js")
+      .then(() => navigator.serviceWorker.ready)
+      .catch(() => null);
+  }
+
+  return serviceWorkerRegistrationPromise;
+}
+
+function setStorePushBusy(isBusy) {
+  storePushState.busy = isBusy;
+  if (pushActionBtn) {
+    pushActionBtn.disabled = isBusy || !storePushState.supported;
+  }
+}
+
+function renderStorePushState() {
+  if (!pushStatusText || !pushStatusHint || !pushActionText || !pushActionBadge || !pushActionBtn) {
+    return;
+  }
+
+  const permission = getPushPermissionState();
+  storePushState.supported = isPushSupported();
+  storePushState.permission = permission;
+
+  if (!storePushState.supported) {
+    pushStatusText.textContent = t("pushStatusUnsupported");
+    pushStatusHint.textContent = t("pushHintDenied");
+    pushActionText.textContent = t("pushActionEnable");
+    pushActionBadge.textContent = "";
+    pushActionBtn.disabled = true;
+    return;
+  }
+
+  if (!storePushState.enabled) {
+    pushStatusText.textContent = t("pushStatusDisabled");
+    pushStatusHint.textContent = t("pushHintNotSubscribed");
+    pushActionText.textContent = t("pushActionEnable");
+    pushActionBadge.textContent = "";
+    pushActionBtn.disabled = true;
+    return;
+  }
+
+  if (storePushState.busy) {
+    pushActionText.textContent = storePushState.subscribed ? t("pushUnsubscribing") : t("pushSubscribing");
+    pushActionBadge.textContent = storePushState.subscribed ? t("pushBadgeActive") : t("pushBadgeInactive");
+    pushActionBtn.disabled = true;
+    return;
+  }
+
+  if (permission === "denied") {
+    pushStatusText.textContent = t("pushStatusDenied");
+    pushStatusHint.textContent = t("pushHintDenied");
+    pushActionText.textContent = t("pushActionEnable");
+    pushActionBadge.textContent = t("pushBadgeInactive");
+    pushActionBtn.disabled = false;
+    return;
+  }
+
+  if (storePushState.subscribed) {
+    pushStatusText.textContent = t("pushStatusSubscribed");
+    pushStatusHint.textContent = t("pushHintSubscribed", {
+      count: Number(storePushState.storeSubscriptions || 0)
+    });
+    pushActionText.textContent = t("pushActionDisable");
+    pushActionBadge.textContent = t("pushBadgeActive");
+    pushActionBtn.disabled = false;
+    return;
+  }
+
+  pushStatusText.textContent =
+    permission === "granted" ? t("pushStatusNotSubscribed") : t("pushStatusDefault");
+  pushStatusHint.textContent =
+    permission === "granted" ? t("pushHintNotSubscribed") : t("pushHintDefault");
+  pushActionText.textContent =
+    permission === "granted" ? t("pushActionSync") : t("pushActionEnable");
+  pushActionBadge.textContent = t("pushBadgeInactive");
+  pushActionBtn.disabled = false;
+}
+
+async function syncStorePushSubscription(subscription, options = {}) {
+  const payload = subscription?.toJSON ? subscription.toJSON() : subscription;
+  const data = await apiFetch("/api/store/push/subscribe", {
+    method: "POST",
+    body: JSON.stringify({ subscription: payload })
+  });
+  storePushState.enabled = Boolean(data.enabled);
+  storePushState.storeSubscriptions = Number(data.storeSubscriptions || 0);
+  storePushState.subscribed = true;
+  renderStorePushState();
+  if (!options.silent) {
+    showToast(t("pushSubscribedDone"), "success");
+  }
+  return data;
+}
+
+async function loadStorePushStatus(options = {}) {
+  const { syncExisting = false, silent = false } = options;
+  storePushState.supported = isPushSupported();
+  storePushState.permission = getPushPermissionState();
+
+  if (getRole() !== "store" || !getToken()) {
+    storePushState.enabled = false;
+    storePushState.subscribed = false;
+    storePushState.publicKey = "";
+    storePushState.storeSubscriptions = 0;
+    renderStorePushState();
+    return;
+  }
+
+  if (!storePushState.supported) {
+    renderStorePushState();
+    return;
+  }
+
+  try {
+    const status = await apiFetch("/api/store/push/status");
+    storePushState.enabled = Boolean(status.enabled && status.publicKey);
+    storePushState.publicKey = status.publicKey || "";
+    storePushState.storeSubscriptions = Number(status.storeSubscriptions || 0);
+
+    const registration = await registerServiceWorker();
+    const subscription = registration ? await registration.pushManager.getSubscription() : null;
+    storePushState.subscribed = Boolean(subscription);
+
+    if (
+      syncExisting &&
+      storePushState.enabled &&
+      storePushState.permission === "granted" &&
+      subscription
+    ) {
+      await syncStorePushSubscription(subscription, { silent: true });
+    }
+  } catch (error) {
+    storePushState.enabled = false;
+    storePushState.publicKey = "";
+    storePushState.subscribed = false;
+    if (!silent) {
+      showToast(error.message || t("pushStatusDisabled"), "error");
+    }
+  } finally {
+    renderStorePushState();
+  }
+}
+
+async function subscribeStorePush() {
+  if (!isPushSupported()) {
+    renderStorePushState();
+    return;
+  }
+
+  setStorePushBusy(true);
+  try {
+    if (!storePushState.enabled || !storePushState.publicKey) {
+      await loadStorePushStatus({ silent: true });
+    }
+
+    if (!storePushState.enabled || !storePushState.publicKey) {
+      throw new Error(localizeServerMessage("Push notification chưa được cấu hình trên máy chủ."));
+    }
+
+    let permission = getPushPermissionState();
+    if (permission === "denied") {
+      showToast(t("pushStatusDenied"), "error");
+      renderStorePushState();
+      return;
+    }
+    if (permission !== "granted") {
+      permission = await Notification.requestPermission();
+    }
+    storePushState.permission = permission;
+
+    if (permission !== "granted") {
+      showToast(t("pushStatusDenied"), "error");
+      renderStorePushState();
+      return;
+    }
+
+    const registration = await registerServiceWorker();
+    if (!registration) {
+      renderStorePushState();
+      return;
+    }
+
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(storePushState.publicKey)
+      });
+    }
+
+    await syncStorePushSubscription(subscription);
+  } catch (error) {
+    showToast(error.message || t("pushStatusDisabled"), "error");
+  } finally {
+    setStorePushBusy(false);
+    renderStorePushState();
+  }
+}
+
+async function unsubscribeStorePush() {
+  if (!isPushSupported()) {
+    renderStorePushState();
+    return;
+  }
+
+  setStorePushBusy(true);
+  try {
+    const registration = await registerServiceWorker();
+    const subscription = registration ? await registration.pushManager.getSubscription() : null;
+    const endpoint = subscription?.endpoint || "";
+
+    if (subscription) {
+      await subscription.unsubscribe().catch(() => null);
+    }
+
+    if (endpoint) {
+      const result = await apiFetch("/api/store/push/subscribe", {
+        method: "DELETE",
+        body: JSON.stringify({ endpoint })
+      });
+      storePushState.storeSubscriptions = Number(result.storeSubscriptions || 0);
+    }
+
+    storePushState.subscribed = false;
+    renderStorePushState();
+    showToast(t("pushUnsubscribedDone"), "success");
+  } catch (error) {
+    showToast(error.message || t("pushStatusDisabled"), "error");
+  } finally {
+    setStorePushBusy(false);
+    renderStorePushState();
+  }
+}
+
+function showAnnouncementPushFeedback(pushResult) {
+  if (!pushResult?.requested) {
+    return;
+  }
+
+  if (pushResult.enabled === false) {
+    showToast(t("announcementPushDisabled"), "info", 4500);
+    return;
+  }
+
+  if (pushResult.skipped === "no-subscribers") {
+    showToast(t("announcementPushNoSubscribers"), "info", 4500);
+    return;
+  }
+
+  if (pushResult.failed > 0) {
+    showToast(
+      t("announcementPushPartialSummary", {
+        sent: Number(pushResult.sent || 0),
+        matched: Number(pushResult.matched || 0),
+        failed: Number(pushResult.failed || 0)
+      }),
+      "info",
+      4500
+    );
+    return;
+  }
+
+  if (Number(pushResult.sent || 0) > 0 || Number(pushResult.matched || 0) > 0) {
+    showToast(
+      t("announcementPushSentSummary", {
+        sent: Number(pushResult.sent || 0),
+        matched: Number(pushResult.matched || 0)
+      }),
+      "success",
+      4000
+    );
+  }
 }
 
 /* ---------- 5. Toast System ---------- */
@@ -870,6 +1248,7 @@ function applyStaticTranslations() {
   // More panel
   setTextById("moreLangGroupTitle", t("moreLangTitle"));
   setTextById("moreLangLabel", t("moreLangLabel"));
+  setTextById("pushGroupTitle", t("pushGroupTitle"));
   setTextById("moreActionsTitle", t("moreActionsTitle"));
   setTextById("moreInstallText", t("moreInstall"));
   setTextById("adminMoreLangTitle", t("moreLangTitle"));
@@ -888,6 +1267,8 @@ function applyStaticTranslations() {
   setTextById("annExpiresLabel", t("announcementExpiresLabel"));
   setTextById("annExpiresOptional", t("announcementExpiresOptional"));
   setTextById("annPinnedLabel", t("announcementPinnedLabel"));
+  setTextById("annNotifyPushLabel", t("announcementNotifyPushLabel"));
+  setTextById("annNotifyPushHint", t("announcementNotifyPushHint"));
   setTextById("annFilterLabel", t("announcementFilterLabel"));
   setTextById("annCancelEditBtn", t("announcementCancel"));
   if (annTitleInput) annTitleInput.placeholder = t("announcementTitlePlaceholder");
@@ -912,6 +1293,7 @@ function applyStaticTranslations() {
     annFilterSelect.value = adminAnnouncementFilter;
   }
   setAnnouncementFormBusy(false);
+  renderStorePushState();
 
   syncAllLangButtons();
 
@@ -1519,6 +1901,16 @@ async function handleLogout() {
   storeSearchInput.value = "";
   if (adminAnnouncementsGrid) adminAnnouncementsGrid.innerHTML = "";
   resetAnnForm();
+  storePushState = {
+    supported: isPushSupported(),
+    enabled: false,
+    permission: getPushPermissionState(),
+    subscribed: false,
+    busy: false,
+    publicKey: "",
+    storeSubscriptions: 0
+  };
+  renderStorePushState();
   clearSession();
   showLogin();
   showToast(t("logoutDone"), "success");
@@ -1569,9 +1961,11 @@ loginForm.addEventListener("submit", async (e) => {
     } else if (data.dashboard) {
       renderStoreDashboard(data.dashboard);
       showStoreApp();
+      loadStorePushStatus({ syncExisting: true, silent: true });
     } else {
       showStoreApp();
       loadStoreDashboard(true);
+      loadStorePushStatus({ syncExisting: true, silent: true });
     }
   } catch (err) {
     clearSession();
@@ -1584,6 +1978,15 @@ loginForm.addEventListener("submit", async (e) => {
 
 refreshBtn.addEventListener("click", () => loadStoreDashboard(true));
 logoutBtn.addEventListener("click", handleLogout);
+if (pushActionBtn) {
+  pushActionBtn.addEventListener("click", () => {
+    if (storePushState.subscribed) {
+      unsubscribeStorePush();
+    } else {
+      subscribeStorePush();
+    }
+  });
+}
 adminRefreshBtn.addEventListener("click", () => {
   loadAdminDashboard(true);
   if (adminStoreQuery.trim()) loadAdminStoreSearch(true);
@@ -1960,6 +2363,7 @@ function validateAnnouncementForm() {
       targetArea: target === "area" ? area : null,
       targetStore: target === "store" ? storeCode : null,
       pinned: annPinnedInput ? annPinnedInput.checked : false,
+      notifyPush: annNotifyPushInput ? annNotifyPushInput.checked : true,
       expiresAt: annExpiresInput?.value || null
     }
   };
@@ -2009,6 +2413,7 @@ function resetAnnForm() {
   clearAnnouncementFieldErrors();
   updateAnnouncementTargetVisibility();
   annCancelEditBtn.classList.add("hidden");
+  if (annNotifyPushInput) annNotifyPushInput.checked = true;
   if (annCharCount) annCharCount.textContent = "0/300";
   if (annTypeSelector) {
     annTypeSelector.querySelectorAll(".ann-type-btn").forEach((b, i) => b.classList.toggle("active", i === 0));
@@ -2036,19 +2441,21 @@ if (adminAnnouncementForm) {
     const editingId = annEditingId ? annEditingId.value : "";
     setAnnouncementFormBusy(true);
     try {
+      let result;
       if (editingId) {
-        await apiFetch("/api/admin/announcements/" + editingId, {
+        result = await apiFetch("/api/admin/announcements/" + editingId, {
           method: "PUT",
           body: JSON.stringify(validation.values)
         });
         showToast(t("announcementUpdateDone"), "success");
       } else {
-        await apiFetch("/api/admin/announcements", {
+        result = await apiFetch("/api/admin/announcements", {
           method: "POST",
           body: JSON.stringify(validation.values)
         });
         showToast(t("announcementCreateDone"), "success");
       }
+      showAnnouncementPushFeedback(result?.pushResult);
       resetAnnForm();
       await loadAdminAnnouncements();
     } catch (err) {
@@ -2242,6 +2649,7 @@ function editAnnouncement(ann) {
   }
   if (annExpiresInput) annExpiresInput.value = ann.expiresAt ? ann.expiresAt.substring(0, 10) : "";
   if (annPinnedInput) annPinnedInput.checked = Boolean(ann.pinned);
+  if (annNotifyPushInput) annNotifyPushInput.checked = false;
   if (annEditingId) annEditingId.value = ann.id;
   clearAnnouncementFieldErrors();
   updateAnnouncementTargetVisibility();
@@ -2377,7 +2785,15 @@ if (storeContent && pullIndicator) {
 
 /* ---------- 19. Service Worker ---------- */
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => null));
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data?.type === "announcement-push" && getRole() === "store" && getToken()) {
+      showToast(t("pushMessageReceived"), "success", 2500);
+      loadStoreDashboard();
+    }
+  });
+  window.addEventListener("load", () => {
+    registerServiceWorker().catch(() => null);
+  });
 }
 
 /* ---------- 20. Init ---------- */
@@ -2395,6 +2811,7 @@ if (getToken()) {
   } else {
     showStoreApp();
     loadStoreDashboard(true);
+    loadStorePushStatus({ syncExisting: true, silent: true });
   }
 } else {
   showLogin();

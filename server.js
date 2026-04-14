@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs").promises;
 const express = require("express");
 const XLSX = require("xlsx");
+const webpush = require("web-push");
 require("dotenv").config();
 
 const app = express();
@@ -22,6 +23,9 @@ const adminAccountsJson = (process.env.ADMIN_ACCOUNTS_JSON || "").trim();
 const adminUsername = (process.env.ADMIN_USERNAME || "").trim();
 const adminPassword = (process.env.ADMIN_PASSWORD || "").trim();
 const adminName = (process.env.ADMIN_NAME || "").trim();
+const webPushSubject = (process.env.WEB_PUSH_SUBJECT || "mailto:admin@example.com").trim();
+const envWebPushPublicKey = (process.env.WEB_PUSH_PUBLIC_KEY || "").trim();
+const envWebPushPrivateKey = (process.env.WEB_PUSH_PRIVATE_KEY || "").trim();
 
 const SUBSCRIPTION_TYPES = [
   {
@@ -144,6 +148,9 @@ const ANNOUNCEMENT_TARGETS = new Set(["all", "area", "store"]);
 
 // --- Announcements State ---
 const ANNOUNCEMENTS_FILE = path.join(__dirname, "data", "announcements.json");
+const PUSH_SUBSCRIPTIONS_FILE = path.join(__dirname, "data", "push-subscriptions.json");
+const PUSH_VAPID_KEYS_FILE = path.join(__dirname, "data", "push-vapid-keys.json");
+let pushConfigPromise = null;
 
 function getAnnouncementTimeZoneParts(date, timeZone) {
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -490,6 +497,326 @@ async function saveAnnouncements(announcements) {
     console.error("Error saving announcements:", err);
     throw err;
   }
+}
+
+function coerceBoolean(value, fallback = false) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
+}
+
+async function loadJsonFile(filePath, fallbackValue) {
+  try {
+    const raw = await fs.readFile(filePath, "utf-8");
+    return JSON.parse(raw);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return fallbackValue;
+    }
+    throw error;
+  }
+}
+
+async function saveJsonFile(filePath, value) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, JSON.stringify(value, null, 2), "utf-8");
+}
+
+function normalizePushSubscriptionRecord(record = {}) {
+  const subscription = record.subscription && typeof record.subscription === "object"
+    ? record.subscription
+    : record;
+  const endpoint = String(subscription?.endpoint || "").trim();
+  const createdAt = parseAnnouncementTimestamp(record.createdAt) || new Date().toISOString();
+  const updatedAt = parseAnnouncementTimestamp(record.updatedAt || record.createdAt) || createdAt;
+
+  return {
+    id: String(record.id || crypto.randomUUID()).trim() || crypto.randomUUID(),
+    storeCode: String(record.storeCode || "").trim().toUpperCase(),
+    area: String(record.area || "").trim(),
+    endpoint,
+    subscription: {
+      endpoint,
+      expirationTime:
+        subscription?.expirationTime === null || Number.isFinite(subscription?.expirationTime)
+          ? subscription.expirationTime
+          : null,
+      keys: {
+        p256dh: String(subscription?.keys?.p256dh || "").trim(),
+        auth: String(subscription?.keys?.auth || "").trim()
+      }
+    },
+    userAgent: String(record.userAgent || "").trim(),
+    createdAt,
+    updatedAt,
+    lastSentAt: parseAnnouncementTimestamp(record.lastSentAt),
+    lastErrorAt: parseAnnouncementTimestamp(record.lastErrorAt),
+    lastErrorMessage: String(record.lastErrorMessage || "").trim()
+  };
+}
+
+function serializePushSubscriptionRecord(record) {
+  return {
+    id: record.id,
+    storeCode: record.storeCode,
+    area: record.area,
+    subscription: {
+      endpoint: record.subscription.endpoint,
+      expirationTime: record.subscription.expirationTime,
+      keys: {
+        p256dh: record.subscription.keys.p256dh,
+        auth: record.subscription.keys.auth
+      }
+    },
+    userAgent: record.userAgent,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    lastSentAt: record.lastSentAt || null,
+    lastErrorAt: record.lastErrorAt || null,
+    lastErrorMessage: record.lastErrorMessage || ""
+  };
+}
+
+function isValidPushSubscription(subscription) {
+  return Boolean(
+    subscription &&
+      typeof subscription === "object" &&
+      String(subscription.endpoint || "").trim() &&
+      String(subscription?.keys?.p256dh || "").trim() &&
+      String(subscription?.keys?.auth || "").trim()
+  );
+}
+
+async function loadPushSubscriptions() {
+  try {
+    const parsed = await loadJsonFile(PUSH_SUBSCRIPTIONS_FILE, []);
+    return (Array.isArray(parsed) ? parsed : [])
+      .map((record) => normalizePushSubscriptionRecord(record))
+      .filter((record) => isValidPushSubscription(record.subscription) && record.storeCode);
+  } catch (error) {
+    console.error("Error loading push subscriptions:", error);
+    return [];
+  }
+}
+
+async function savePushSubscriptions(records) {
+  const normalized = (Array.isArray(records) ? records : [])
+    .map((record) => normalizePushSubscriptionRecord(record))
+    .filter((record) => isValidPushSubscription(record.subscription) && record.storeCode);
+  await saveJsonFile(
+    PUSH_SUBSCRIPTIONS_FILE,
+    normalized.map((record) => serializePushSubscriptionRecord(record))
+  );
+  return normalized;
+}
+
+async function getWebPushConfig() {
+  if (!pushConfigPromise) {
+    pushConfigPromise = (async () => {
+      let publicKey = envWebPushPublicKey;
+      let privateKey = envWebPushPrivateKey;
+      let source = "env";
+
+      if (!publicKey || !privateKey) {
+        const savedKeys = await loadJsonFile(PUSH_VAPID_KEYS_FILE, null);
+        if (savedKeys?.publicKey && savedKeys?.privateKey) {
+          publicKey = String(savedKeys.publicKey).trim();
+          privateKey = String(savedKeys.privateKey).trim();
+          source = "file";
+        }
+      }
+
+      if (!publicKey || !privateKey) {
+        const generated = webpush.generateVAPIDKeys();
+        publicKey = generated.publicKey;
+        privateKey = generated.privateKey;
+        source = "generated";
+        await saveJsonFile(PUSH_VAPID_KEYS_FILE, {
+          publicKey,
+          privateKey,
+          generatedAt: new Date().toISOString()
+        });
+      }
+
+      webpush.setVapidDetails(webPushSubject, publicKey, privateKey);
+
+      return {
+        enabled: true,
+        subject: webPushSubject,
+        publicKey,
+        source
+      };
+    })().catch((error) => {
+      console.error("Web push configuration error:", error);
+      return {
+        enabled: false,
+        subject: webPushSubject,
+        publicKey: "",
+        source: "error",
+        error: error.message || "Push unavailable."
+      };
+    });
+  }
+
+  return pushConfigPromise;
+}
+
+function getPushSubscriptionsForAnnouncement(announcement, subscriptions) {
+  return (Array.isArray(subscriptions) ? subscriptions : []).filter((record) => {
+    if (announcement.target === "area") {
+      return record.area === announcement.targetArea;
+    }
+    if (announcement.target === "store") {
+      return record.storeCode === announcement.targetStore;
+    }
+    return true;
+  });
+}
+
+function buildAnnouncementPushPayload(announcement) {
+  const emoji = String(announcement.emoji || "").trim();
+  return {
+    type: "announcement-push",
+    title: `${emoji ? `${emoji} ` : ""}${announcement.title || "Nuevo anuncio"}`.trim(),
+    body: String(announcement.message || "").trim(),
+    tag: `announcement:${announcement.id}:${announcement.version || announcement.updatedAt || ""}`,
+    renotify: true,
+    requireInteraction: announcement.type === "urgent",
+    url: "/",
+    icon: "/icons/icon-192.svg",
+    badge: "/icons/icon-192.svg",
+    announcement: {
+      id: announcement.id,
+      version: announcement.version,
+      type: announcement.type,
+      title: announcement.title,
+      message: announcement.message,
+      target: announcement.target,
+      targetArea: announcement.targetArea,
+      targetStore: announcement.targetStore,
+      updatedAt: announcement.updatedAt
+    }
+  };
+}
+
+async function dispatchAnnouncementPush(announcement, options = {}) {
+  const requested = coerceBoolean(options.requested, false);
+  if (!requested) {
+    return {
+      requested: false,
+      enabled: false,
+      skipped: "not-requested",
+      matched: 0,
+      sent: 0,
+      failed: 0,
+      removed: 0
+    };
+  }
+
+  if (!announcement || announcement.active === false || isAnnouncementExpired(announcement)) {
+    return {
+      requested: true,
+      enabled: true,
+      skipped: "inactive",
+      matched: 0,
+      sent: 0,
+      failed: 0,
+      removed: 0
+    };
+  }
+
+  const config = await getWebPushConfig();
+  if (!config.enabled || !config.publicKey) {
+    return {
+      requested: true,
+      enabled: false,
+      skipped: "disabled",
+      matched: 0,
+      sent: 0,
+      failed: 0,
+      removed: 0
+    };
+  }
+
+  const subscriptions = await loadPushSubscriptions();
+  const matched = getPushSubscriptionsForAnnouncement(announcement, subscriptions);
+  if (!matched.length) {
+    return {
+      requested: true,
+      enabled: true,
+      skipped: "no-subscribers",
+      matched: 0,
+      sent: 0,
+      failed: 0,
+      removed: 0
+    };
+  }
+
+  const payload = JSON.stringify(buildAnnouncementPushPayload(announcement));
+  const topic = `ann-${String(announcement.id || "")
+    .replace(/[^A-Za-z0-9_-]/g, "")
+    .slice(0, 28)}`;
+  const invalidEndpoints = new Set();
+  let sent = 0;
+  let failed = 0;
+
+  await Promise.all(
+    matched.map(async (record) => {
+      try {
+        await webpush.sendNotification(record.subscription, payload, {
+          TTL: 60 * 60 * 24,
+          urgency: announcement.type === "urgent" ? "high" : "normal",
+          topic
+        });
+        record.lastSentAt = new Date().toISOString();
+        record.lastErrorAt = null;
+        record.lastErrorMessage = "";
+        sent += 1;
+      } catch (error) {
+        failed += 1;
+        record.lastErrorAt = new Date().toISOString();
+        record.lastErrorMessage = String(error.message || "Push send failed.");
+        if ([404, 410].includes(Number(error.statusCode))) {
+          invalidEndpoints.add(record.endpoint);
+        } else {
+          console.error(`Push send error for ${record.storeCode}:`, error.message || error);
+        }
+      }
+    })
+  );
+
+  const nextSubscriptions = subscriptions
+    .map((record) => {
+      const updated = matched.find((item) => item.endpoint === record.endpoint);
+      return updated || record;
+    })
+    .filter((record) => !invalidEndpoints.has(record.endpoint));
+
+  await savePushSubscriptions(nextSubscriptions);
+
+  return {
+    requested: true,
+    enabled: true,
+    skipped: null,
+    matched: matched.length,
+    sent,
+    failed,
+    removed: invalidEndpoints.size
+  };
 }
 
 app.use(express.json({ limit: "1mb" }));
@@ -1563,11 +1890,13 @@ function requireRole(role) {
   };
 }
 
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", async (_req, res) => {
+  const pushConfig = await getWebPushConfig();
   res.json({
     ok: true,
     googleSheetsConfigured: isSheetsConfigured(),
     adminConfigured: getConfiguredAdmins().length > 0,
+    pushNotificationsConfigured: Boolean(pushConfig.enabled && pushConfig.publicKey),
     schema: "subscription-metrics-v5-admin-env"
   });
 });
@@ -1694,6 +2023,95 @@ app.get("/api/dashboard", authenticate, requireRole("store"), async (req, res) =
   } catch (error) {
     console.error("Dashboard error:", error);
     return jsonError(res, 500, error.message || "Không thể tải dashboard.");
+  }
+});
+
+app.get("/api/store/push/status", authenticate, requireRole("store"), async (req, res) => {
+  try {
+    const config = await getWebPushConfig();
+    const subscriptions = await loadPushSubscriptions();
+    return res.json({
+      enabled: Boolean(config.enabled && config.publicKey),
+      publicKey: config.publicKey || "",
+      storeSubscriptions: subscriptions.filter((record) => record.storeCode === req.session.code).length
+    });
+  } catch (error) {
+    console.error("Push status error:", error);
+    return jsonError(res, 500, "Không thể tải cấu hình thông báo.");
+  }
+});
+
+app.post("/api/store/push/subscribe", authenticate, requireRole("store"), async (req, res) => {
+  try {
+    const config = await getWebPushConfig();
+    if (!config.enabled || !config.publicKey) {
+      return jsonError(res, 503, "Push notification chưa được cấu hình trên máy chủ.");
+    }
+
+    const subscription = req.body?.subscription;
+    if (!isValidPushSubscription(subscription)) {
+      return jsonError(res, 400, "Subscription push không hợp lệ.");
+    }
+
+    const { stores } = await getDataSnapshot();
+    const store = stores.find((item) => item.code === req.session.code);
+    if (!store) {
+      return jsonError(res, 404, "Điểm bán không còn tồn tại trên hệ thống.");
+    }
+
+    const subscriptions = await loadPushSubscriptions();
+    const endpoint = String(subscription.endpoint || "").trim();
+    const index = subscriptions.findIndex((record) => record.endpoint === endpoint);
+    const now = new Date().toISOString();
+    const existing = index >= 0 ? subscriptions[index] : null;
+    const normalized = normalizePushSubscriptionRecord({
+      id: existing?.id || crypto.randomUUID(),
+      storeCode: store.code,
+      area: store.area,
+      subscription,
+      userAgent: req.get("user-agent") || existing?.userAgent || "",
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      lastSentAt: existing?.lastSentAt || null,
+      lastErrorAt: null,
+      lastErrorMessage: ""
+    });
+
+    const nextSubscriptions = [...subscriptions];
+    if (index >= 0) {
+      nextSubscriptions[index] = normalized;
+    } else {
+      nextSubscriptions.unshift(normalized);
+    }
+    const saved = await savePushSubscriptions(nextSubscriptions);
+    return res.json({
+      ok: true,
+      enabled: true,
+      storeSubscriptions: saved.filter((record) => record.storeCode === store.code).length
+    });
+  } catch (error) {
+    console.error("Push subscribe error:", error);
+    return jsonError(res, 500, "Không thể lưu đăng ký thông báo.");
+  }
+});
+
+app.delete("/api/store/push/subscribe", authenticate, requireRole("store"), async (req, res) => {
+  try {
+    const endpoint = String(req.body?.endpoint || "").trim();
+    if (!endpoint) {
+      return jsonError(res, 400, "Endpoint push là bắt buộc.");
+    }
+
+    const subscriptions = await loadPushSubscriptions();
+    const filtered = subscriptions.filter((record) => record.endpoint !== endpoint);
+    const saved = await savePushSubscriptions(filtered);
+    return res.json({
+      ok: true,
+      storeSubscriptions: saved.filter((record) => record.storeCode === req.session.code).length
+    });
+  } catch (error) {
+    console.error("Push unsubscribe error:", error);
+    return jsonError(res, 500, "Không thể hủy đăng ký thông báo.");
   }
 });
 
@@ -1885,7 +2303,11 @@ app.post("/api/admin/announcements", authenticate, requireRole("admin"), async (
     }
 
     const saved = await saveAnnouncements([value, ...list]);
-    return res.status(201).json(saved.find((record) => record.id === value.id) || value);
+    const item = saved.find((record) => record.id === value.id) || value;
+    const pushResult = await dispatchAnnouncementPush(item, {
+      requested: coerceBoolean(req.body?.notifyPush, true)
+    });
+    return res.status(201).json({ ...item, pushResult });
   } catch (err) {
     console.error("Create announcement error:", err);
     return jsonError(res, 500, "Không thể lưu thông báo.");
@@ -1917,7 +2339,11 @@ app.put("/api/admin/announcements/:id", authenticate, requireRole("admin"), asyn
     const nextList = [...list];
     nextList[index] = value;
     const saved = await saveAnnouncements(nextList);
-    return res.json(saved.find((record) => record.id === value.id) || value);
+    const item = saved.find((record) => record.id === value.id) || value;
+    const pushResult = await dispatchAnnouncementPush(item, {
+      requested: coerceBoolean(req.body?.notifyPush, false)
+    });
+    return res.json({ ...item, pushResult });
   } catch (err) {
     console.error("Update announcement error:", err);
     return jsonError(res, 500, "Không thể cập nhật thông báo.");

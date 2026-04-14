@@ -1,3 +1,5 @@
 node_modules
 .env
 .DS_Store
+data/push-vapid-keys.json
+data/push-subscriptions.json

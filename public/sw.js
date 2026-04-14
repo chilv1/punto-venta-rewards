@@ -1,4 +1,4 @@
-const CACHE_NAME = "pdv-rewards-v2";
+const CACHE_NAME = "pdv-rewards-v3";
 const STATIC_ASSETS = [
   "/",
   "/index.html",
@@ -58,6 +58,68 @@ self.addEventListener("fetch", (event) => {
           return networkResponse;
         })
         .catch(() => caches.match("/index.html"));
+    })
+  );
+});
+
+async function broadcastToClients(message) {
+  const clients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true
+  });
+
+  clients.forEach((client) => client.postMessage(message));
+}
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (_error) {
+    payload = {
+      title: "Programa Punto de Venta",
+      body: event.data ? event.data.text() : ""
+    };
+  }
+
+  const title = payload.title || "Programa Punto de Venta";
+  const options = {
+    body: payload.body || "",
+    icon: payload.icon || "/icons/icon-192.svg",
+    badge: payload.badge || "/icons/icon-192.svg",
+    tag: payload.tag || `announcement-${Date.now()}`,
+    renotify: payload.renotify === true,
+    requireInteraction: payload.requireInteraction === true,
+    data: {
+      url: payload.url || "/",
+      announcement: payload.announcement || null
+    }
+  };
+
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(title, options),
+      broadcastToClients({
+        type: "announcement-push",
+        payload
+      })
+    ])
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = event.notification?.data?.url || "/";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const existingClient = clients.find((client) => client.url.startsWith(self.location.origin));
+      if (existingClient) {
+        existingClient.focus();
+        return existingClient.navigate(targetUrl);
+      }
+      return self.clients.openWindow(targetUrl);
     })
   );
 });
