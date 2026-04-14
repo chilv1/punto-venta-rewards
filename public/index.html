@@ -525,33 +525,15 @@
             </div>
           </div>
 
-          <!-- Tab: Admin More -->
-          <div id="adminMoreTab" class="tab-panel">
+          <!-- Tab: Admin Push -->
+          <div id="adminPushTab" class="tab-panel">
+            <div class="section-block">
+              <h3 id="pushGateEditorTitle" class="section-title">Popup obligatorio de notificaciones</h3>
+              <p id="pushGateEditorText" class="section-text">Edita el texto que verá el punto de venta antes de aceptar las notificaciones push.</p>
+            </div>
+
             <div class="more-panel">
               <div class="more-group">
-                <p class="more-group-title" id="adminMoreLangTitle">Idioma</p>
-                <div class="more-lang-row">
-                  <span class="more-lang-label" id="adminMoreLangLabel">Seleccionar idioma</span>
-                  <div class="lang-switch" role="group">
-                    <button id="adminMoreLangEsBtn" class="lang-btn active" type="button">ES</button>
-                    <button id="adminMoreLangViBtn" class="lang-btn" type="button">VI</button>
-                  </div>
-                </div>
-              </div>
-              <div class="more-group">
-                <p class="more-group-title" id="adminMoreActionsTitle">Acciones</p>
-                <button id="adminRefreshBtn" class="more-item" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                  <span class="mi-text" id="adminRefreshBtnText">Actualizar datos</span>
-                </button>
-                <button id="exportBtn" class="more-item" type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  <span class="mi-text" id="exportBtnText">Exportar Excel</span>
-                </button>
-              </div>
-              <div class="more-group">
-                <p class="more-group-title" id="pushGateEditorTitle">Popup obligatorio de notificaciones</p>
-                <p class="section-text" id="pushGateEditorText" style="margin:0 0 16px;">Edita el texto que verá el punto de venta antes de aceptar las notificaciones push.</p>
                 <div class="more-lang-row" style="margin-bottom:16px;">
                   <span class="more-lang-label" id="pushGateEditorLangLabel">Idioma del popup</span>
                   <div class="lang-switch" role="group">
@@ -634,6 +616,33 @@
                   </div>
                 </form>
               </div>
+            </div>
+          </div>
+
+          <!-- Tab: Admin More -->
+          <div id="adminMoreTab" class="tab-panel">
+            <div class="more-panel">
+              <div class="more-group">
+                <p class="more-group-title" id="adminMoreLangTitle">Idioma</p>
+                <div class="more-lang-row">
+                  <span class="more-lang-label" id="adminMoreLangLabel">Seleccionar idioma</span>
+                  <div class="lang-switch" role="group">
+                    <button id="adminMoreLangEsBtn" class="lang-btn active" type="button">ES</button>
+                    <button id="adminMoreLangViBtn" class="lang-btn" type="button">VI</button>
+                  </div>
+                </div>
+              </div>
+              <div class="more-group">
+                <p class="more-group-title" id="adminMoreActionsTitle">Acciones</p>
+                <button id="adminRefreshBtn" class="more-item" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                  <span class="mi-text" id="adminRefreshBtnText">Actualizar datos</span>
+                </button>
+                <button id="exportBtn" class="more-item" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span class="mi-text" id="exportBtnText">Exportar Excel</span>
+                </button>
+              </div>
               <div class="more-group">
                 <button id="adminLogoutBtn" class="more-item is-danger" type="button">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -657,6 +666,10 @@
           <button class="nav-btn" data-tab="adminAnnouncementsTab" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span id="navAdminAnnouncements">Avisos</span>
+          </button>
+          <button class="nav-btn" data-tab="adminPushTab" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5"/><path d="M10 17a2 2 0 0 0 4 0"/></svg>
+            <span id="navAdminPush">Push</span>
           </button>
           <button class="nav-btn" data-tab="adminMoreTab" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>

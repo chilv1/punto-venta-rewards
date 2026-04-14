@@ -29,6 +29,12 @@ let foregroundPushAnnouncement = null;
 let pendingPushAnnouncementPayload = null;
 let pendingPushAnnouncementRef = null;
 let notificationAudioContext = null;
+let authTransitionLocked = false;
+let suppressAuthErrorsUntil = 0;
+let lastAuthNoticeAt = 0;
+let logoutRequestPromise = null;
+let lastToastSignature = "";
+let lastToastAt = 0;
 let storePushState = {
   supported: false,
   enabled: false,
@@ -36,7 +42,8 @@ let storePushState = {
   subscribed: false,
   busy: false,
   publicKey: "",
-  storeSubscriptions: 0
+  storeSubscriptions: 0,
+  lastSyncedEndpoint: ""
 };
 
 /* ---------- 2. DOM References ---------- */
@@ -332,6 +339,7 @@ const translations = {
     navMore: "Más",
     navOverview: "Resumen",
     navStores: "Puntos",
+    navAdminPush: "Push",
     moreLangTitle: "Idioma",
     moreLangLabel: "Seleccionar idioma",
     pushGroupTitle: "Notificaciones",
@@ -629,6 +637,7 @@ const translations = {
     navMore: "Thêm",
     navOverview: "Tổng hợp",
     navStores: "Điểm bán",
+    navAdminPush: "Push",
     moreLangTitle: "Ngôn ngữ",
     moreLangLabel: "Chọn ngôn ngữ",
     pushGroupTitle: "Thông báo",
@@ -1060,6 +1069,89 @@ function setTextById(id, value) {
   if (el) el.textContent = value;
 }
 
+function createDefaultStorePushState() {
+  return {
+    supported: isPushSupported(),
+    enabled: false,
+    permission: getPushPermissionState(),
+    subscribed: false,
+    busy: false,
+    publicKey: "",
+    storeSubscriptions: 0,
+    lastSyncedEndpoint: ""
+  };
+}
+
+function resetAuthTransitionState() {
+  authTransitionLocked = false;
+  suppressAuthErrorsUntil = 0;
+  lastAuthNoticeAt = 0;
+}
+
+function performLocalSignOut(options = {}) {
+  const { notify = false } = options;
+
+  latestDashboard = null;
+  latestAdminDashboard = null;
+  latestAdminAnnouncements = [];
+  announcementTargetOptions = { areas: [], stores: [] };
+  adminAnnouncementFilter = "all";
+  selectedAdminStoreCode = "";
+  adminStoreQuery = "";
+  adminCurrentPage = 1;
+  cachedAllStoreItems = null;
+  if (storeSearchInput) {
+    storeSearchInput.value = "";
+  }
+  if (adminAnnouncementsGrid) {
+    adminAnnouncementsGrid.innerHTML = "";
+  }
+  resetAnnForm();
+  foregroundPushAnnouncement = null;
+  pendingPushAnnouncementPayload = null;
+  pendingPushAnnouncementRef = null;
+  closePushAnnouncementModal();
+  closePushGateModal(true);
+  storePushState = createDefaultStorePushState();
+  pushGateCopyConfig = buildDefaultPushGateCopyConfig();
+  pushGateEditorLanguage = currentLanguage === "vi" ? "vi" : "es";
+  setPushGateEditorBusy(false);
+  renderPushGateEditorValues();
+  renderStorePushState();
+  clearSession();
+  authStatus.textContent = "";
+  authStatus.classList.remove("is-error");
+  showLogin();
+  codeInput.focus();
+
+  if (notify) {
+    showToast(t("logoutDone"), "success");
+  }
+}
+
+function handleSessionError(error, options = {}) {
+  if (!error?.isSessionError) {
+    return false;
+  }
+
+  const { showNotice = true } = options;
+  if (!authTransitionLocked) {
+    authTransitionLocked = true;
+    performLocalSignOut({ notify: false });
+  }
+
+  if (
+    showNotice &&
+    Date.now() >= suppressAuthErrorsUntil &&
+    Date.now() - lastAuthNoticeAt > 1500
+  ) {
+    lastAuthNoticeAt = Date.now();
+    showToast(error.message || t("authInvalid"), "error");
+  }
+
+  return true;
+}
+
 function getPushPermissionState() {
   return typeof Notification === "undefined" ? "unsupported" : Notification.permission;
 }
@@ -1182,6 +1274,7 @@ async function syncStorePushSubscription(subscription, options = {}) {
   storePushState.enabled = Boolean(data.enabled);
   storePushState.storeSubscriptions = Number(data.storeSubscriptions || 0);
   storePushState.subscribed = true;
+  storePushState.lastSyncedEndpoint = String(payload?.endpoint || subscription?.endpoint || "").trim();
   renderStorePushState();
   if (!options.silent) {
     showToast(t("pushSubscribedDone"), "success");
@@ -1218,19 +1311,29 @@ async function loadStorePushStatus(options = {}) {
     const registration = await registerServiceWorker();
     const subscription = registration ? await registration.pushManager.getSubscription() : null;
     storePushState.subscribed = Boolean(subscription);
+    const endpoint = String(subscription?.endpoint || "").trim();
+    if (!endpoint) {
+      storePushState.lastSyncedEndpoint = "";
+    }
 
     if (
       syncExisting &&
       storePushState.enabled &&
       storePushState.permission === "granted" &&
-      subscription
+      subscription &&
+      endpoint &&
+      storePushState.lastSyncedEndpoint !== endpoint
     ) {
       await syncStorePushSubscription(subscription, { silent: true });
     }
   } catch (error) {
+    if (handleSessionError(error, { showNotice: !silent })) {
+      return;
+    }
     storePushState.enabled = false;
     storePushState.publicKey = "";
     storePushState.subscribed = false;
+    storePushState.lastSyncedEndpoint = "";
     if (!silent) {
       showToast(error.message || t("pushStatusDisabled"), "error");
     }
@@ -1288,6 +1391,9 @@ async function subscribeStorePush() {
 
     await syncStorePushSubscription(subscription);
   } catch (error) {
+    if (handleSessionError(error)) {
+      return;
+    }
     showToast(error.message || t("pushStatusDisabled"), "error");
   } finally {
     setStorePushBusy(false);
@@ -1320,9 +1426,13 @@ async function unsubscribeStorePush() {
     }
 
     storePushState.subscribed = false;
+    storePushState.lastSyncedEndpoint = "";
     renderStorePushState();
     showToast(t("pushUnsubscribedDone"), "success");
   } catch (error) {
+    if (handleSessionError(error)) {
+      return;
+    }
     showToast(error.message || t("pushStatusDisabled"), "error");
   } finally {
     setStorePushBusy(false);
@@ -1647,6 +1757,9 @@ async function loadAdminPushGateCopyConfig(options = {}) {
     applyPushGateCopyConfig(data);
     renderPushGateEditorValues();
   } catch (error) {
+    if (handleSessionError(error, { showNotice: !silent })) {
+      return;
+    }
     setPushGateEditorStatus(error.message || t("pushGateEditorLoadError"), "error");
     if (!silent) {
       showToast(error.message || t("pushGateEditorLoadError"), "error");
@@ -1681,6 +1794,9 @@ async function saveAdminPushGateCopyConfig() {
     renderPushGateEditorValues();
     showToast(t("pushGateEditorSaveDone"), "success");
   } catch (error) {
+    if (handleSessionError(error)) {
+      return;
+    }
     if (error.fieldErrors) {
       Object.keys(error.fieldErrors).forEach((field) => {
         pushGateEditorFields[field]?.classList.add("is-invalid");
@@ -1695,6 +1811,13 @@ async function saveAdminPushGateCopyConfig() {
 
 /* ---------- 5. Toast System ---------- */
 function showToast(message, type = "info", duration = 3000) {
+  const signature = `${type}::${String(message || "").trim()}`;
+  if (signature === lastToastSignature && Date.now() - lastToastAt < 1200) {
+    return;
+  }
+  lastToastSignature = signature;
+  lastToastAt = Date.now();
+
   const toast = document.createElement("div");
   toast.className = `toast${type === "error" ? " is-error" : type === "success" ? " is-success" : ""}`;
   toast.textContent = message;
@@ -1750,6 +1873,54 @@ function setupTabNavigation(navEl, contentEl, onSwitch) {
       if (onSwitch) onSwitch(tabId);
     });
   });
+}
+
+function prepareStoreDashboardLoading(store = {}) {
+  latestDashboard = null;
+  storeName.textContent = store.name || t("defaultStoreName");
+  storeMeta.textContent = [store.code || "", store.area || ""].filter(Boolean).join(" • ");
+  totalReward.textContent = "S/ 0";
+  totalRewardMeta.textContent = "";
+  todayTotal.textContent = "0";
+  todayDate.textContent = "";
+  cumulativeTotal.textContent = "0";
+  cumulativeMeta.textContent = "";
+  achievedReward.textContent = t("achievedRewardEmpty");
+  achievedLevel.textContent = t("achievedRewardEmptyNote");
+  achCardReached.classList.remove("is-achieved");
+  nextReward.textContent = "S/ 0";
+  nextLevel.textContent = "";
+  updatedAt.textContent = "";
+  dashboardStatus.textContent = t("dashboardLoading");
+  storeAnnouncements.classList.add("hidden");
+  annCarouselStop();
+  nudgeBanner.classList.add("hidden");
+  leaderboardSection.style.display = "none";
+  levelsGrid.innerHTML = "";
+  categoriesGrid.innerHTML = "";
+  historyGrid.innerHTML = `<div class="history-empty">${t("dashboardLoading")}</div>`;
+}
+
+function prepareAdminDashboardLoading(admin = {}) {
+  latestAdminDashboard = null;
+  cachedAllStoreItems = null;
+  adminNameEl.textContent = admin.name || t("defaultAdminName");
+  adminMeta.textContent = [admin.username || "", t("adminDashboardLoading")].filter(Boolean).join(" • ");
+  adminTotalReward.textContent = "S/ 0";
+  adminTotalRewardMeta.textContent = "";
+  adminStoresCount.textContent = "0";
+  adminStoresMeta.textContent = t("adminDashboardLoading");
+  adminTodayTotal.textContent = "0";
+  adminTodayMeta.textContent = t("adminDashboardLoading");
+  adminCumulativeTotal.textContent = "0";
+  adminCumulativeMeta.textContent = "";
+  adminAggregateCategoriesGrid.innerHTML = `<div class="empty-state">${t("adminDashboardLoading")}</div>`;
+  adminAggregateLevelsGrid.innerHTML = `<div class="empty-state">${t("adminDashboardLoading")}</div>`;
+  adminStoresTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px">${t("adminDashboardLoading")}</td></tr>`;
+  adminPaginationInfo.textContent = "";
+  adminPrevPageBtn.disabled = true;
+  adminNextPageBtn.disabled = true;
+  showAdminStorePromptMsg(t("adminDashboardLoading"));
 }
 
 /* ---------- 8. Pull to Refresh ---------- */
@@ -1854,6 +2025,7 @@ function applyStaticTranslations() {
   setTextById("navAdminOverview", t("navOverview"));
   setTextById("navAdminStores", t("navStores"));
   setTextById("navAdminAnnouncements", t("navAnnouncements"));
+  setTextById("navAdminPush", t("navAdminPush"));
   setTextById("navAdminMore", t("navMore"));
 
   // More panel
@@ -2128,6 +2300,7 @@ function renderHistory(container, history, todayKey) {
 /* ---------- 12. Store Dashboard Renderer ---------- */
 function renderStoreDashboard(data) {
   latestDashboard = data;
+  dashboardStatus.textContent = "";
   storeName.textContent = data.store.name || t("defaultStoreName");
   storeMeta.textContent = [data.store.code, data.store.area].filter(Boolean).join(" • ");
 
@@ -2405,6 +2578,11 @@ async function apiFetch(url, options = {}) {
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     const error = new Error(localizeServerMessage(data.error || t("unsupportedRequest")));
+    error.status = resp.status;
+    error.isSessionError =
+      Boolean(token) &&
+      !String(url).startsWith("/api/auth/login") &&
+      [401, 403].includes(resp.status);
     if (data.fieldErrors && typeof data.fieldErrors === "object") {
       error.fieldErrors = Object.fromEntries(
         Object.entries(data.fieldErrors).map(([key, value]) => [key, localizeServerMessage(String(value))])
@@ -2428,7 +2606,13 @@ async function apiBlobFetch(url, options = {}) {
   if (!resp.ok) {
     let msg = t("unsupportedRequest");
     try { const d = await resp.json(); msg = localizeServerMessage(d.error || msg); } catch (_e) { /* ignore */ }
-    throw new Error(msg);
+    const error = new Error(msg);
+    error.status = resp.status;
+    error.isSessionError =
+      Boolean(token) &&
+      !String(url).startsWith("/api/auth/login") &&
+      [401, 403].includes(resp.status);
+    throw error;
   }
   return resp.blob();
 }
@@ -2443,10 +2627,10 @@ async function loadStoreDashboard(forceRefresh = false) {
     ensureStorePushMandatory({ silent: true });
     if (forceRefresh) showToast(t("dashboardSynced"), "success");
   } catch (err) {
-    clearSession();
-    latestDashboard = null;
-    showLogin();
-    showToast(err.message || t("authInvalid"), "error");
+    if (handleSessionError(err)) {
+      return;
+    }
+    showToast(err.message || t("unsupportedRequest"), "error");
   }
 }
 
@@ -2459,10 +2643,10 @@ async function loadAdminDashboard(forceRefresh = false) {
     showAdminApp();
     if (forceRefresh) showToast(t("adminDashboardSynced"), "success");
   } catch (err) {
-    clearSession();
-    latestAdminDashboard = null;
-    showLogin();
-    showToast(err.message || t("authInvalid"), "error");
+    if (handleSessionError(err)) {
+      return;
+    }
+    showToast(err.message || t("unsupportedRequest"), "error");
   }
 }
 
@@ -2477,6 +2661,9 @@ async function loadAdminStoreDetail(code, forceRefresh = false) {
     adminStoreDetail.innerHTML = "";
     adminStoreDetail.appendChild(createStoreDetailView(data));
   } catch (err) {
+    if (handleSessionError(err)) {
+      return;
+    }
     showAdminStorePromptMsg(err.message || t("adminNoStoreMatch"));
   }
 }
@@ -2503,47 +2690,35 @@ async function loadAdminStoreSearch(forceRefresh = false) {
       showAdminStorePromptMsg(t("adminNoStoreMatch"));
     }
   } catch (err) {
+    if (handleSessionError(err)) {
+      return;
+    }
     storeSelector.innerHTML = "";
     showAdminStorePromptMsg(err.message || t("adminNoStoreMatch"));
   }
 }
 
 async function handleLogout() {
-  try { await apiFetch("/api/auth/logout", { method: "POST" }); } catch (_e) { /* ignore */ }
-  latestDashboard = null;
-  latestAdminDashboard = null;
-  latestAdminAnnouncements = [];
-  announcementTargetOptions = { areas: [], stores: [] };
-  adminAnnouncementFilter = "all";
-  selectedAdminStoreCode = "";
-  adminStoreQuery = "";
-  adminCurrentPage = 1;
-  storeSearchInput.value = "";
-  if (adminAnnouncementsGrid) adminAnnouncementsGrid.innerHTML = "";
-  resetAnnForm();
-  foregroundPushAnnouncement = null;
-  pendingPushAnnouncementPayload = null;
-  pendingPushAnnouncementRef = null;
-  closePushAnnouncementModal();
-  closePushGateModal(true);
-  storePushState = {
-    supported: isPushSupported(),
-    enabled: false,
-    permission: getPushPermissionState(),
-    subscribed: false,
-    busy: false,
-    publicKey: "",
-    storeSubscriptions: 0
-  };
-  pushGateCopyConfig = buildDefaultPushGateCopyConfig();
-  pushGateEditorLanguage = currentLanguage === "vi" ? "vi" : "es";
-  setPushGateEditorBusy(false);
-  renderPushGateEditorValues();
-  renderStorePushState();
-  clearSession();
-  showLogin();
-  showToast(t("logoutDone"), "success");
-  codeInput.focus();
+  const token = getToken();
+  authTransitionLocked = true;
+  suppressAuthErrorsUntil = Date.now() + 2500;
+  performLocalSignOut({ notify: true });
+
+  if (!token) {
+    return;
+  }
+  if (!logoutRequestPromise) {
+    logoutRequestPromise = fetch("/api/auth/logout", {
+      method: "POST",
+      cache: "no-store",
+      keepalive: true,
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }).catch(() => null).finally(() => {
+      logoutRequestPromise = null;
+    });
+  }
 }
 
 async function downloadAdminExport() {
@@ -2560,6 +2735,9 @@ async function downloadAdminExport() {
     link.remove();
     showToast(t("exportDone"), "success");
   } catch (err) {
+    if (handleSessionError(err)) {
+      return;
+    }
     showToast(err.message || t("unsupportedRequest"), "error");
   }
 }
@@ -2574,6 +2752,7 @@ loginForm.addEventListener("submit", async (e) => {
   try {
     const payload = { code: codeInput.value.trim().toUpperCase(), password: passwordInput.value.trim() };
     const data = await apiFetch("/api/auth/login", { method: "POST", body: JSON.stringify(payload) });
+    resetAuthTransitionState();
     setToken(data.token);
     setRole(data.role || "store");
     passwordInput.value = "";
@@ -2583,18 +2762,20 @@ loginForm.addEventListener("submit", async (e) => {
       adminCurrentPage = 1;
       adminStoreQuery = "";
       storeSearchInput.value = "";
-      // Show admin app immediately with loading state, then fetch dashboard async
+      if (data.dashboard) {
+        renderAdminDashboard(data.dashboard);
+      } else {
+        prepareAdminDashboardLoading(data.admin);
+      }
       showAdminApp();
-      showToast(t("loginLoading"), "info", 3000);
       loadAdminPushGateCopyConfig({ silent: true });
-      loadAdminDashboard(true);
-    } else if (data.dashboard) {
-      renderStoreDashboard(data.dashboard);
-      showStoreApp();
-      ensureStorePushMandatory({ silent: true });
+      if (!data.dashboard) {
+        loadAdminDashboard();
+      }
     } else {
+      prepareStoreDashboardLoading(data.store);
       showStoreApp();
-      loadStoreDashboard(true);
+      loadStoreDashboard();
       ensureStorePushMandatory({ silent: true });
     }
   } catch (err) {
@@ -2654,7 +2835,7 @@ adminRefreshBtn.addEventListener("click", () => {
     loadAnnouncementTargets(true);
     loadAdminAnnouncements(true);
   }
-  if (activeAdminTab === "adminMoreTab") {
+  if (activeAdminTab === "adminPushTab") {
     loadAdminPushGateCopyConfig({ forceRefresh: true });
   }
 });
@@ -3235,6 +3416,9 @@ async function loadAnnouncementTargets(forceRefresh = false) {
     syncAnnouncementTargetSuggestions();
     setAnnouncementFormStatus("");
   } catch (err) {
+    if (handleSessionError(err, { showNotice: forceRefresh })) {
+      return;
+    }
     setAnnouncementFormStatus("", "error");
     showToast(err.message || t("announcementTargetsError"), "error");
   }
@@ -3299,6 +3483,9 @@ if (adminAnnouncementForm) {
       resetAnnForm();
       await loadAdminAnnouncements();
     } catch (err) {
+      if (handleSessionError(err)) {
+        return;
+      }
       if (err.fieldErrors) {
         Object.entries(err.fieldErrors).forEach(([field, value]) => setAnnouncementFieldError(field, value));
         setAnnouncementFormStatus(err.message || t("announcementFormInvalid"), "error");
@@ -3407,6 +3594,9 @@ function renderAdminAnnouncementsList() {
         showToast(t("announcementDeleteDone"), "success");
         await loadAdminAnnouncements();
       } catch (err) {
+        if (handleSessionError(err)) {
+          return;
+        }
         showToast(err.message, "error");
       } finally {
         button.disabled = false;
@@ -3422,6 +3612,9 @@ function renderAdminAnnouncementsList() {
         showToast(result.pinned ? t("announcementPinDone") : t("announcementUnpinDone"), "success");
         await loadAdminAnnouncements();
       } catch (err) {
+        if (handleSessionError(err)) {
+          return;
+        }
         showToast(err.message, "error");
       } finally {
         button.disabled = false;
@@ -3444,6 +3637,9 @@ function renderAdminAnnouncementsList() {
         showToast(result.active ? t("announcementActivateDone") : t("announcementPauseDone"), "success");
         await loadAdminAnnouncements();
       } catch (err) {
+        if (handleSessionError(err)) {
+          return;
+        }
         showToast(err.message, "error");
       } finally {
         button.disabled = false;
@@ -3470,6 +3666,9 @@ async function loadAdminAnnouncements(forceRefresh = false) {
     latestAdminAnnouncements = await apiFetch(`/api/admin/announcements${params}`);
     renderAdminAnnouncementsList();
   } catch (err) {
+    if (handleSessionError(err, { showNotice: forceRefresh })) {
+      return;
+    }
     latestAdminAnnouncements = [];
     if (annListMeta) annListMeta.textContent = t("announcementListMeta", { shown: 0, total: 0 });
     adminAnnouncementsGrid.innerHTML = `<div class="empty-state">${err.message || t("announcementEmpty")}</div>`;
@@ -3511,7 +3710,7 @@ document.querySelectorAll("#adminNav .nav-btn").forEach((btn) => {
       loadAnnouncementTargets();
       loadAdminAnnouncements();
     }
-    if (tabId === "adminMoreTab") {
+    if (tabId === "adminPushTab") {
       loadAdminPushGateCopyConfig({ silent: true });
     }
   });
@@ -3700,13 +3899,15 @@ renderPushGateEditorValues();
 
 if (getToken()) {
   if (getRole() === "admin") {
+    prepareAdminDashboardLoading();
     showAdminApp();
     adminCurrentPage = 1;
     loadAdminPushGateCopyConfig({ silent: true });
-    loadAdminDashboard(true);
+    loadAdminDashboard();
   } else {
+    prepareStoreDashboardLoading();
     showStoreApp();
-    loadStoreDashboard(true);
+    loadStoreDashboard();
     ensureStorePushMandatory({ silent: true });
   }
 } else {

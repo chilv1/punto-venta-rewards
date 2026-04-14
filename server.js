@@ -1457,6 +1457,12 @@ async function getDataSnapshot(options = {}) {
   };
 }
 
+async function getStoresSnapshot(options = {}) {
+  const { force = false } = options;
+  const storeRows = await fetchRange(storesRange, { force });
+  return storeRows.map(sanitizeStore).filter((store) => store.code);
+}
+
 function buildLevelStatus(level, cumulativeMap) {
   const requirements = level.requirements.map((requirement) => {
     const actual = cumulativeMap[requirement.id] || 0;
@@ -1895,6 +1901,92 @@ function buildAdminDashboard(stores, dailyResults, admin, options = {}, resultsB
   };
 }
 
+function getAdminIdentity(admin = {}) {
+  return {
+    username: admin.username,
+    name: admin.name || admin.username
+  };
+}
+
+function buildAdminDashboardResponse(stores, dailyResults, resultsByStore, admin, options = {}) {
+  const { force = false, page, pageSize } = options;
+
+  if (!adminDashboardCache || force || adminDashboardCache.expiresAt <= Date.now()) {
+    const built = buildAdminDashboard(stores, dailyResults, admin, { page, pageSize }, resultsByStore);
+    const { _storeDashboards, ...response } = built;
+    adminDashboardCache = {
+      storeDashboards: _storeDashboards,
+      overview: {
+        ...response,
+        admin: getAdminIdentity(admin)
+      },
+      expiresAt: Date.now() + sheetsCacheTtlMs
+    };
+  }
+
+  return {
+    ...adminDashboardCache.overview,
+    admin: getAdminIdentity(admin),
+    storesPage: buildAdminStoresPage(adminDashboardCache.storeDashboards, { page, pageSize })
+  };
+}
+
+function buildStoreCumulativeTotals(resultsByStore) {
+  const totals = new Map();
+
+  if (!(resultsByStore instanceof Map)) {
+    return totals;
+  }
+
+  for (const [storeCode, entries] of resultsByStore.entries()) {
+    let total = 0;
+    for (const entry of entries) {
+      const row = entry?.row || {};
+      for (const type of SUBSCRIPTION_TYPES) {
+        total += parseAmount(pick(row, type.resultKeys));
+      }
+    }
+    totals.set(storeCode, total);
+  }
+
+  return totals;
+}
+
+function buildAreaLeaderboard(stores, resultsByStore, area, currentStoreCode) {
+  const normalizedArea = String(area || "").trim();
+  const normalizedStoreCode = String(currentStoreCode || "").trim().toUpperCase();
+
+  if (!normalizedArea) {
+    return null;
+  }
+
+  const cumulativeTotals = buildStoreCumulativeTotals(resultsByStore);
+  const rankedStores = stores
+    .filter((store) => String(store.area || "").trim() === normalizedArea)
+    .map((store) => ({
+      code: store.code,
+      name: store.name,
+      total: Number(cumulativeTotals.get(store.code) || 0)
+    }))
+    .sort((left, right) => right.total - left.total || left.code.localeCompare(right.code));
+
+  if (!rankedStores.length) {
+    return null;
+  }
+
+  const myRank = rankedStores.findIndex((store) => store.code === normalizedStoreCode) + 1;
+  return {
+    top10: rankedStores.slice(0, 10).map((store, index) => ({
+      rank: index + 1,
+      code: store.code,
+      name: store.name,
+      total: store.total
+    })),
+    myRank,
+    totalStores: rankedStores.length
+  };
+}
+
 function buildAdminStoreDetail(stores, dailyResults, code, resultsByStore) {
   const normalizedCode = String(code || "")
     .trim()
@@ -2112,16 +2204,27 @@ app.post("/api/auth/login", async (req, res) => {
         username: admin.username,
         name: admin.name
       });
+      const dashboard =
+        adminDashboardCache && adminDashboardCache.expiresAt > Date.now()
+          ? {
+              ...adminDashboardCache.overview,
+              admin: getAdminIdentity(admin),
+              storesPage: buildAdminStoresPage(adminDashboardCache.storeDashboards, {
+                page: 1,
+                pageSize: 20
+              })
+            }
+          : null;
 
       return res.json({
         token,
         role: "admin",
-        admin: { username: admin.username, name: admin.name || admin.username }
+        admin: { username: admin.username, name: admin.name || admin.username },
+        ...(dashboard ? { dashboard } : {})
       });
     }
 
-    // Store login needs Sheets data to verify credentials
-    const { stores, dailyResults, resultsByStore } = await getDataSnapshot();
+    const stores = await getStoresSnapshot();
     const store = stores.find((item) => item.code === code && item.password === password);
 
     if (!store) {
@@ -2132,13 +2235,15 @@ app.post("/api/auth/login", async (req, res) => {
       role: "store",
       code: store.code
     });
-    
-    const dashboardPayload = await buildStoreDashboardPayload(store, stores, dailyResults, resultsByStore);
-    
+
     return res.json({
       token,
       role: "store",
-      dashboard: dashboardPayload
+      store: {
+        code: store.code,
+        name: store.name || `Điểm bán ${store.code}`,
+        area: store.area || ""
+      }
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -2147,35 +2252,7 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 async function buildStoreDashboardPayload(store, stores, dailyResults, resultsByStore) {
-  // Ensure admin cache is valid so we have fast access to all store score totals
-  let cachedDashboards;
-  if (adminDashboardCache && adminDashboardCache.expiresAt > Date.now()) {
-      cachedDashboards = adminDashboardCache.storeDashboards;
-  } else {
-      const built = buildAdminDashboard(stores, dailyResults, { username: 'system' }, { page: 1, pageSize: 20 }, resultsByStore);
-      const { _storeDashboards, ...response } = built;
-      adminDashboardCache = {
-          storeDashboards: _storeDashboards,
-          overview: response,
-          expiresAt: Date.now() + sheetsCacheTtlMs
-      };
-      cachedDashboards = _storeDashboards;
-  }
-
-  let leaderboard = null;
-  if (store.area) {
-     const areaDashboards = cachedDashboards.filter(d => d.store.area === store.area);
-     const sortedArea = areaDashboards.sort((a, b) => b.cumulative.total - a.cumulative.total);
-     const top10 = sortedArea.slice(0, 10).map((d, index) => ({
-        rank: index + 1,
-        code: d.store.code,
-        name: d.store.name,
-        total: d.cumulative.total
-     }));
-     const myRank = sortedArea.findIndex(d => d.store.code === store.code) + 1;
-     leaderboard = { top10, myRank, totalStores: sortedArea.length };
-  }
-  
+  const leaderboard = buildAreaLeaderboard(stores, resultsByStore, store.area, store.code);
   const allAnnouncements = await loadAnnouncements();
   const announcements = allAnnouncements.filter((announcement) => {
     if (announcement.active === false || isAnnouncementExpired(announcement)) {
@@ -2309,8 +2386,11 @@ app.delete("/api/store/push/subscribe", authenticate, requireRole("store"), asyn
   }
 });
 
-app.post("/api/auth/logout", authenticate, (req, res) => {
-  sessions.delete(req.sessionToken);
+app.post("/api/auth/logout", (req, res) => {
+  const token = getSessionToken(req);
+  if (token) {
+    sessions.delete(token);
+  }
   return res.json({ ok: true });
 });
 
@@ -2320,38 +2400,13 @@ app.get("/api/admin/dashboard", authenticate, requireRole("admin"), async (req, 
     const page = req.query.page;
     const pageSize = req.query.pageSize;
     const { stores, dailyResults, resultsByStore } = await getDataSnapshot({ force });
-
-    // Cache the expensive computation (all store dashboards)
-    if (!adminDashboardCache || force) {
-      const built = buildAdminDashboard(stores, dailyResults, req.session, { page, pageSize }, resultsByStore);
-      const { _storeDashboards, ...response } = built;
-      adminDashboardCache = {
-        storeDashboards: _storeDashboards,
-        overview: response,
-        expiresAt: Date.now() + sheetsCacheTtlMs
-      };
-      return res.json(response);
-    }
-
-    if (adminDashboardCache.expiresAt > Date.now()) {
-      // Re-paginate from cached storeDashboards
-      const repaged = {
-        ...adminDashboardCache.overview,
-        storesPage: buildAdminStoresPage(adminDashboardCache.storeDashboards, { page, pageSize })
-      };
-      return res.json(repaged);
-    }
-
-    // Cache expired
-    adminDashboardCache = null;
-    const built = buildAdminDashboard(stores, dailyResults, req.session, { page, pageSize }, resultsByStore);
-    const { _storeDashboards, ...response } = built;
-    adminDashboardCache = {
-      storeDashboards: _storeDashboards,
-      overview: response,
-      expiresAt: Date.now() + sheetsCacheTtlMs
-    };
-    return res.json(response);
+    return res.json(
+      buildAdminDashboardResponse(stores, dailyResults, resultsByStore, req.session, {
+        force,
+        page,
+        pageSize
+      })
+    );
   } catch (error) {
     console.error("Admin dashboard error:", error);
     return jsonError(res, 500, error.message || "Không thể tải dashboard quản trị.");
