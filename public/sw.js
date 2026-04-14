@@ -1,4 +1,4 @@
-const CACHE_NAME = "pdv-rewards-v3";
+const CACHE_NAME = "pdv-rewards-v4";
 const STATIC_ASSETS = [
   "/",
   "/index.html",
@@ -91,9 +91,13 @@ self.addEventListener("push", (event) => {
     tag: payload.tag || `announcement-${Date.now()}`,
     renotify: payload.renotify === true,
     requireInteraction: payload.requireInteraction === true,
+    vibrate: Array.isArray(payload.vibrate) ? payload.vibrate : [240, 120, 240],
+    silent: payload.silent === true ? true : false,
+    actions: Array.isArray(payload.actions) ? payload.actions : [],
     data: {
       url: payload.url || "/",
-      announcement: payload.announcement || null
+      announcement: payload.announcement || null,
+      playSound: payload.playSound === true
     }
   };
 
@@ -110,16 +114,31 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  if (event.action === "dismiss") {
+    return;
+  }
   const targetUrl = event.notification?.data?.url || "/";
+  const message = {
+    type: "announcement-open",
+    payload: {
+      announcement: event.notification?.data?.announcement || null,
+      playSound: event.notification?.data?.playSound === true
+    }
+  };
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       const existingClient = clients.find((client) => client.url.startsWith(self.location.origin));
       if (existingClient) {
-        existingClient.focus();
-        return existingClient.navigate(targetUrl);
+        return existingClient.focus().then(() => {
+          existingClient.postMessage(message);
+          return existingClient.navigate(targetUrl);
+        });
       }
-      return self.clients.openWindow(targetUrl);
+      return self.clients.openWindow(targetUrl).then((client) => {
+        client?.postMessage(message);
+        return client;
+      });
     })
   );
 });

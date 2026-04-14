@@ -170,6 +170,57 @@
              </div>
           </div>
 
+          <div id="pushAnnouncementModal" class="modal-overlay hidden">
+            <div class="modal-content push-alert-modal">
+              <div class="modal-header push-alert-header">
+                <div>
+                  <p id="pushModalEyebrow" class="push-alert-eyebrow">Alerta inmediata</p>
+                  <h3 id="pushModalTitle">Nuevo anuncio</h3>
+                </div>
+                <button id="closePushModalBtn" class="btn-icon" type="button" aria-label="Cerrar">×</button>
+              </div>
+              <div class="modal-body">
+                <span id="pushModalTypeBadge" class="ann-type-badge">📢 INFO</span>
+                <p id="pushModalMessage" class="push-alert-message"></p>
+                <div class="push-alert-meta">
+                  <strong id="pushModalTarget">Todos los puntos</strong>
+                  <span id="pushModalTime"></span>
+                </div>
+                <div class="push-alert-actions">
+                  <button id="pushModalViewBtn" class="btn-primary" type="button">Ver ahora</button>
+                  <button id="pushModalDismissBtn" class="btn-secondary" type="button">Cerrar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="pushGateModal" class="modal-overlay hidden">
+            <div class="modal-content push-gate-modal">
+              <div class="modal-header push-gate-header">
+                <div>
+                  <p id="pushGateEyebrow" class="push-gate-eyebrow">Notificación obligatoria</p>
+                  <h3 id="pushGateTitle">Activa las notificaciones para continuar</h3>
+                </div>
+              </div>
+              <div class="modal-body">
+                <p id="pushGateMessage" class="push-gate-message">Este punto de venta debe mantener activas las notificaciones push para recibir avisos y alertas operativas.</p>
+                <p id="pushGateDetails" class="push-gate-detail hidden">Acepta la solicitud del navegador para recibir anuncios urgentes, cambios operativos y recordatorios importantes incluso con la app cerrada.</p>
+                <div class="push-gate-status">
+                  <strong id="pushGateStatusTitle">Esperando permiso del navegador</strong>
+                  <span id="pushGateStatusHint">Pulsa el botón y acepta la solicitud del navegador.</span>
+                </div>
+                <div class="push-gate-actions">
+                  <button id="pushGatePrimaryBtn" class="btn-primary" type="button">Activar ahora</button>
+                  <button id="pushGateSecondaryBtn" class="btn-secondary" type="button">Ya lo habilité</button>
+                </div>
+                <button id="pushGateLogoutBtn" class="more-item is-danger push-gate-logout" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  <span class="mi-text" id="pushGateLogoutText">Cerrar sesión</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- Tab: Levels -->
           <div id="storeLevelsTab" class="tab-panel">
             <div class="section-block">
@@ -497,6 +548,91 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   <span class="mi-text" id="exportBtnText">Exportar Excel</span>
                 </button>
+              </div>
+              <div class="more-group">
+                <p class="more-group-title" id="pushGateEditorTitle">Popup obligatorio de notificaciones</p>
+                <p class="section-text" id="pushGateEditorText" style="margin:0 0 16px;">Edita el texto que verá el punto de venta antes de aceptar las notificaciones push.</p>
+                <div class="more-lang-row" style="margin-bottom:16px;">
+                  <span class="more-lang-label" id="pushGateEditorLangLabel">Idioma del popup</span>
+                  <div class="lang-switch" role="group">
+                    <button id="pushGateEditorEsBtn" class="lang-btn active" type="button">ES</button>
+                    <button id="pushGateEditorViBtn" class="lang-btn" type="button">VI</button>
+                  </div>
+                </div>
+                <form id="pushGateEditorForm" class="push-gate-editor-form" novalidate>
+                  <div class="push-gate-editor-grid">
+                    <div class="form-group">
+                      <label id="pushGateEditorEyebrowLabel" for="pushGateEditorEyebrowInput">Etiqueta superior</label>
+                      <input id="pushGateEditorEyebrowInput" type="text" maxlength="60">
+                    </div>
+                    <div class="form-group">
+                      <label id="pushGateEditorTitleLabel" for="pushGateEditorTitleInput">Título principal</label>
+                      <input id="pushGateEditorTitleInput" type="text" maxlength="120">
+                    </div>
+                    <div class="form-group push-gate-editor-full">
+                      <label id="pushGateEditorMessageLabel" for="pushGateEditorMessageInput">Mensaje principal</label>
+                      <textarea id="pushGateEditorMessageInput" rows="4" maxlength="500"></textarea>
+                    </div>
+                    <div class="form-group push-gate-editor-full">
+                      <label id="pushGateEditorDetailsLabel" for="pushGateEditorDetailsInput">Contenido adicional</label>
+                      <textarea id="pushGateEditorDetailsInput" rows="4" maxlength="500"></textarea>
+                    </div>
+                    <div class="form-group">
+                      <label id="pushGateEditorPendingLabel" for="pushGateEditorPendingInput">Estado: esperando permiso</label>
+                      <input id="pushGateEditorPendingInput" type="text" maxlength="90">
+                    </div>
+                    <div class="form-group">
+                      <label id="pushGateEditorPendingHintLabel" for="pushGateEditorPendingHintInput">Ayuda: esperando permiso</label>
+                      <textarea id="pushGateEditorPendingHintInput" rows="3" maxlength="220"></textarea>
+                    </div>
+                    <div class="form-group">
+                      <label id="pushGateEditorDeniedLabel" for="pushGateEditorDeniedInput">Estado: bloqueado</label>
+                      <input id="pushGateEditorDeniedInput" type="text" maxlength="90">
+                    </div>
+                    <div class="form-group">
+                      <label id="pushGateEditorDeniedHintLabel" for="pushGateEditorDeniedHintInput">Ayuda: bloqueado</label>
+                      <textarea id="pushGateEditorDeniedHintInput" rows="3" maxlength="220"></textarea>
+                    </div>
+                    <div class="form-group">
+                      <label id="pushGateEditorSyncLabel" for="pushGateEditorSyncInput">Estado: sincronizando</label>
+                      <input id="pushGateEditorSyncInput" type="text" maxlength="90">
+                    </div>
+                    <div class="form-group">
+                      <label id="pushGateEditorSyncHintLabel" for="pushGateEditorSyncHintInput">Ayuda: sincronizando</label>
+                      <textarea id="pushGateEditorSyncHintInput" rows="3" maxlength="220"></textarea>
+                    </div>
+                    <div class="form-group">
+                      <label id="pushGateEditorUnsupportedLabel" for="pushGateEditorUnsupportedInput">Estado: navegador no compatible</label>
+                      <input id="pushGateEditorUnsupportedInput" type="text" maxlength="90">
+                    </div>
+                    <div class="form-group">
+                      <label id="pushGateEditorUnsupportedHintLabel" for="pushGateEditorUnsupportedHintInput">Ayuda: navegador no compatible</label>
+                      <textarea id="pushGateEditorUnsupportedHintInput" rows="3" maxlength="220"></textarea>
+                    </div>
+                    <div class="form-group">
+                      <label id="pushGateEditorDisabledLabel" for="pushGateEditorDisabledInput">Estado: servidor sin push</label>
+                      <input id="pushGateEditorDisabledInput" type="text" maxlength="90">
+                    </div>
+                    <div class="form-group">
+                      <label id="pushGateEditorDisabledHintLabel" for="pushGateEditorDisabledHintInput">Ayuda: servidor sin push</label>
+                      <textarea id="pushGateEditorDisabledHintInput" rows="3" maxlength="220"></textarea>
+                    </div>
+                    <div class="form-group">
+                      <label id="pushGateEditorPrimaryLabel" for="pushGateEditorPrimaryInput">Botón principal</label>
+                      <input id="pushGateEditorPrimaryInput" type="text" maxlength="40">
+                    </div>
+                    <div class="form-group">
+                      <label id="pushGateEditorSecondaryLabel" for="pushGateEditorSecondaryInput">Botón secundario</label>
+                      <input id="pushGateEditorSecondaryInput" type="text" maxlength="40">
+                    </div>
+                  </div>
+                  <p id="pushGateEditorMeta" class="section-text" style="margin:16px 0 0;"></p>
+                  <p id="pushGateEditorStatus" class="form-status"></p>
+                  <div style="display:flex; gap:8px; margin-top:4px;">
+                    <button id="pushGateEditorSaveBtn" class="btn-primary" type="submit">Guardar texto</button>
+                    <button id="pushGateEditorResetBtn" class="btn-secondary" type="button">Cargar texto base</button>
+                  </div>
+                </form>
               </div>
               <div class="more-group">
                 <button id="adminLogoutBtn" class="more-item is-danger" type="button">

@@ -21,7 +21,14 @@ let cachedAllStoreItems = null;
 let latestAdminAnnouncements = [];
 let announcementTargetOptions = { areas: [], stores: [] };
 let adminAnnouncementFilter = "all";
+let pushGateCopyConfig = null;
+let pushGateEditorLanguage = currentLanguage === "vi" ? "vi" : "es";
+let pushGateEditorBusy = false;
 let serviceWorkerRegistrationPromise = null;
+let foregroundPushAnnouncement = null;
+let pendingPushAnnouncementPayload = null;
+let pendingPushAnnouncementRef = null;
+let notificationAudioContext = null;
 let storePushState = {
   supported: false,
   enabled: false,
@@ -93,6 +100,51 @@ const simulatorTotalReward = $("simulatorTotalReward");
 const leaderboardSection = $("leaderboardSection");
 const leaderboardGrid = $("leaderboardGrid");
 const leaderboardMeta = $("leaderboardMeta");
+const pushAnnouncementModal = $("pushAnnouncementModal");
+const pushModalEyebrow = $("pushModalEyebrow");
+const pushModalTitle = $("pushModalTitle");
+const pushModalTypeBadge = $("pushModalTypeBadge");
+const pushModalMessage = $("pushModalMessage");
+const pushModalTarget = $("pushModalTarget");
+const pushModalTime = $("pushModalTime");
+const pushModalViewBtn = $("pushModalViewBtn");
+const pushModalDismissBtn = $("pushModalDismissBtn");
+const closePushModalBtn = $("closePushModalBtn");
+const pushGateModal = $("pushGateModal");
+const pushGateEyebrow = $("pushGateEyebrow");
+const pushGateTitle = $("pushGateTitle");
+const pushGateMessage = $("pushGateMessage");
+const pushGateDetails = $("pushGateDetails");
+const pushGateStatusTitle = $("pushGateStatusTitle");
+const pushGateStatusHint = $("pushGateStatusHint");
+const pushGatePrimaryBtn = $("pushGatePrimaryBtn");
+const pushGateSecondaryBtn = $("pushGateSecondaryBtn");
+const pushGateLogoutBtn = $("pushGateLogoutBtn");
+const pushGateEditorForm = $("pushGateEditorForm");
+const pushGateEditorMeta = $("pushGateEditorMeta");
+const pushGateEditorStatus = $("pushGateEditorStatus");
+const pushGateEditorSaveBtn = $("pushGateEditorSaveBtn");
+const pushGateEditorResetBtn = $("pushGateEditorResetBtn");
+const pushGateEditorEsBtn = $("pushGateEditorEsBtn");
+const pushGateEditorViBtn = $("pushGateEditorViBtn");
+const pushGateEditorFields = {
+  eyebrow: $("pushGateEditorEyebrowInput"),
+  title: $("pushGateEditorTitleInput"),
+  message: $("pushGateEditorMessageInput"),
+  details: $("pushGateEditorDetailsInput"),
+  statusPending: $("pushGateEditorPendingInput"),
+  statusPendingHint: $("pushGateEditorPendingHintInput"),
+  statusDenied: $("pushGateEditorDeniedInput"),
+  statusDeniedHint: $("pushGateEditorDeniedHintInput"),
+  statusSync: $("pushGateEditorSyncInput"),
+  statusSyncHint: $("pushGateEditorSyncHintInput"),
+  statusUnsupported: $("pushGateEditorUnsupportedInput"),
+  statusUnsupportedHint: $("pushGateEditorUnsupportedHintInput"),
+  statusDisabled: $("pushGateEditorDisabledInput"),
+  statusDisabledHint: $("pushGateEditorDisabledHintInput"),
+  primary: $("pushGateEditorPrimaryInput"),
+  secondary: $("pushGateEditorSecondaryInput")
+};
 
 /* Announcement admin */
 const adminAnnouncementForm = $("adminAnnouncementForm");
@@ -303,6 +355,58 @@ const translations = {
     pushSubscribedDone: "Notificaciones activadas.",
     pushUnsubscribedDone: "Notificaciones desactivadas.",
     pushMessageReceived: "Nuevo anuncio recibido.",
+    pushModalEyebrow: "Alerta inmediata",
+    pushModalView: "Ver ahora",
+    pushModalDismiss: "Cerrar",
+    pushModalTargetNow: "Atención del punto de venta",
+    pushModalAudioLocked: "El navegador bloqueó el audio automático. Mantén la app activa para oír la alerta.",
+    pushGateEyebrow: "Notificación obligatoria",
+    pushGateTitle: "Activa las notificaciones para continuar",
+    pushGateMessage: "Este punto de venta debe mantener activas las notificaciones push para recibir avisos y alertas operativas.",
+    pushGateDetails: "Acepta la solicitud del navegador para que el equipo reciba anuncios urgentes, cambios operativos y recordatorios importantes incluso con la app cerrada.",
+    pushGateStatusPending: "Esperando permiso del navegador",
+    pushGateStatusPendingHint: "Pulsa el botón y acepta la solicitud del navegador.",
+    pushGateStatusDenied: "Las notificaciones están bloqueadas",
+    pushGateStatusDeniedHint: "Debes habilitarlas en la configuración del navegador y luego tocar \"Ya lo habilité\".",
+    pushGateStatusSync: "Sincronizando este dispositivo",
+    pushGateStatusSyncHint: "Estamos registrando este equipo para recibir anuncios obligatorios.",
+    pushGateStatusUnsupported: "Este navegador no es compatible",
+    pushGateStatusUnsupportedHint: "Usa Chrome Android o la PWA instalada para continuar.",
+    pushGateStatusDisabled: "El servidor aún no permite push",
+    pushGateStatusDisabledHint: "La app no puede continuar hasta que push esté disponible en el servidor.",
+    pushGatePrimary: "Activar ahora",
+    pushGateRetry: "Ya lo habilité",
+    pushGateEditorTitle: "Popup obligatorio de notificaciones",
+    pushGateEditorText: "Edita el texto que verá el punto de venta antes de aceptar las notificaciones push.",
+    pushGateEditorLangLabel: "Idioma del popup",
+    pushGateEditorEyebrowLabel: "Etiqueta superior",
+    pushGateEditorTitleLabel: "Título principal",
+    pushGateEditorMessageLabel: "Mensaje principal",
+    pushGateEditorDetailsLabel: "Contenido adicional",
+    pushGateEditorPendingLabel: "Estado: esperando permiso",
+    pushGateEditorPendingHintLabel: "Ayuda: esperando permiso",
+    pushGateEditorDeniedLabel: "Estado: bloqueado",
+    pushGateEditorDeniedHintLabel: "Ayuda: bloqueado",
+    pushGateEditorSyncLabel: "Estado: sincronizando",
+    pushGateEditorSyncHintLabel: "Ayuda: sincronizando",
+    pushGateEditorUnsupportedLabel: "Estado: navegador no compatible",
+    pushGateEditorUnsupportedHintLabel: "Ayuda: navegador no compatible",
+    pushGateEditorDisabledLabel: "Estado: servidor sin push",
+    pushGateEditorDisabledHintLabel: "Ayuda: servidor sin push",
+    pushGateEditorPrimaryLabel: "Botón principal",
+    pushGateEditorSecondaryLabel: "Botón secundario",
+    pushGateEditorSave: "Guardar texto",
+    pushGateEditorSaving: "Guardando...",
+    pushGateEditorReset: "Cargar texto base",
+    pushGateEditorLoading: "Cargando contenido del popup...",
+    pushGateEditorLoadError: "No se pudo cargar el contenido del popup.",
+    pushGateEditorSaveDone: "Texto del popup guardado.",
+    pushGateEditorResetDone: "Se cargó el texto base para este idioma. Guarda para aplicarlo.",
+    pushGateEditorInvalid: "Revisa los campos marcados.",
+    pushGateEditorNoUpdates: "Aún no se ha personalizado este popup.",
+    pushGateEditorUpdatedMeta: ({ user, date }) => `Última edición${user ? ` por ${user}` : ""} · ${date}`,
+    pushGateEditorValidationRequired: ({ field }) => `Completa: ${field}.`,
+    pushGateEditorValidationTooLong: ({ field, max }) => `${field} no debe superar ${max} caracteres.`,
     moreActionsTitle: "Acciones",
     moreInstall: "Instalar app",
     navAnnouncements: "Avisos",
@@ -548,6 +652,58 @@ const translations = {
     pushSubscribedDone: "Đã bật thông báo.",
     pushUnsubscribedDone: "Đã tắt thông báo.",
     pushMessageReceived: "Đã nhận thông báo mới.",
+    pushModalEyebrow: "Cảnh báo ngay",
+    pushModalView: "Xem ngay",
+    pushModalDismiss: "Đóng",
+    pushModalTargetNow: "Thông báo cho điểm bán",
+    pushModalAudioLocked: "Trình duyệt đang chặn âm thanh tự động. Giữ app hoạt động để nghe cảnh báo.",
+    pushGateEyebrow: "Bắt buộc bật thông báo",
+    pushGateTitle: "Bật thông báo để tiếp tục",
+    pushGateMessage: "Điểm bán này phải luôn bật push notification để nhận announcement và cảnh báo vận hành.",
+    pushGateDetails: "Hãy chấp nhận hộp thoại của trình duyệt để thiết bị nhận ngay thông báo khẩn, thay đổi vận hành và nhắc việc quan trọng kể cả khi app đã đóng.",
+    pushGateStatusPending: "Đang chờ quyền từ trình duyệt",
+    pushGateStatusPendingHint: "Bấm nút bên dưới và chấp nhận hộp thoại cấp quyền.",
+    pushGateStatusDenied: "Thông báo đang bị chặn",
+    pushGateStatusDeniedHint: "Hãy bật lại trong cài đặt trình duyệt rồi bấm \"Tôi đã bật xong\".",
+    pushGateStatusSync: "Đang đồng bộ thiết bị này",
+    pushGateStatusSyncHint: "Đang đăng ký thiết bị để nhận thông báo bắt buộc.",
+    pushGateStatusUnsupported: "Trình duyệt này không hỗ trợ",
+    pushGateStatusUnsupportedHint: "Hãy dùng Chrome Android hoặc bản PWA đã cài để tiếp tục.",
+    pushGateStatusDisabled: "Máy chủ chưa bật push",
+    pushGateStatusDisabledHint: "App chưa thể tiếp tục cho tới khi máy chủ bật push.",
+    pushGatePrimary: "Bật ngay",
+    pushGateRetry: "Tôi đã bật xong",
+    pushGateEditorTitle: "Popup bắt buộc bật thông báo",
+    pushGateEditorText: "Chỉnh nội dung mà điểm bán sẽ thấy trước khi chấp nhận nhận push notification.",
+    pushGateEditorLangLabel: "Ngôn ngữ popup",
+    pushGateEditorEyebrowLabel: "Nhãn phía trên",
+    pushGateEditorTitleLabel: "Tiêu đề chính",
+    pushGateEditorMessageLabel: "Nội dung chính",
+    pushGateEditorDetailsLabel: "Nội dung bổ sung",
+    pushGateEditorPendingLabel: "Trạng thái: chờ cấp quyền",
+    pushGateEditorPendingHintLabel: "Hướng dẫn: chờ cấp quyền",
+    pushGateEditorDeniedLabel: "Trạng thái: bị chặn",
+    pushGateEditorDeniedHintLabel: "Hướng dẫn: bị chặn",
+    pushGateEditorSyncLabel: "Trạng thái: đang đồng bộ",
+    pushGateEditorSyncHintLabel: "Hướng dẫn: đang đồng bộ",
+    pushGateEditorUnsupportedLabel: "Trạng thái: trình duyệt không hỗ trợ",
+    pushGateEditorUnsupportedHintLabel: "Hướng dẫn: trình duyệt không hỗ trợ",
+    pushGateEditorDisabledLabel: "Trạng thái: máy chủ chưa bật push",
+    pushGateEditorDisabledHintLabel: "Hướng dẫn: máy chủ chưa bật push",
+    pushGateEditorPrimaryLabel: "Nút chính",
+    pushGateEditorSecondaryLabel: "Nút phụ",
+    pushGateEditorSave: "Lưu nội dung",
+    pushGateEditorSaving: "Đang lưu...",
+    pushGateEditorReset: "Nạp nội dung gốc",
+    pushGateEditorLoading: "Đang tải nội dung popup...",
+    pushGateEditorLoadError: "Không thể tải nội dung popup.",
+    pushGateEditorSaveDone: "Đã lưu nội dung popup.",
+    pushGateEditorResetDone: "Đã nạp nội dung gốc cho ngôn ngữ này. Hãy lưu để áp dụng.",
+    pushGateEditorInvalid: "Vui lòng kiểm tra các trường đang lỗi.",
+    pushGateEditorNoUpdates: "Popup này chưa được chỉnh riêng.",
+    pushGateEditorUpdatedMeta: ({ user, date }) => `Cập nhật gần nhất${user ? ` bởi ${user}` : ""} · ${date}`,
+    pushGateEditorValidationRequired: ({ field }) => `Vui lòng nhập: ${field}.`,
+    pushGateEditorValidationTooLong: ({ field, max }) => `${field} không được vượt quá ${max} ký tự.`,
     moreActionsTitle: "Hành động",
     moreInstall: "Cài app",
     navAnnouncements: "Thông báo",
@@ -679,11 +835,72 @@ const serverMessageMap = {
   "Ngày hết hạn không hợp lệ.": { es: "La fecha de vencimiento no es válida.", vi: "Ngày hết hạn không hợp lệ." },
   "Ngày hết hạn phải từ hôm nay trở đi.": { es: "La fecha de vencimiento debe ser desde hoy.", vi: "Ngày hết hạn phải từ hôm nay trở đi." },
   "Không thể tải cấu hình thông báo.": { es: "No se pudo cargar la configuración de notificaciones.", vi: "Không thể tải cấu hình thông báo." },
+  "Không thể tải nội dung popup bật thông báo.": { es: "No se pudo cargar el contenido del popup.", vi: "Không thể tải nội dung popup." },
+  "Không thể lưu nội dung popup bật thông báo.": { es: "No se pudo guardar el contenido del popup.", vi: "Không thể lưu nội dung popup." },
+  "Dữ liệu popup bật thông báo không hợp lệ.": { es: "El contenido del popup no es válido.", vi: "Dữ liệu popup không hợp lệ." },
+  "Ngôn ngữ popup không hợp lệ.": { es: "El idioma del popup no es válido.", vi: "Ngôn ngữ popup không hợp lệ." },
   "Push notification chưa được cấu hình trên máy chủ.": { es: "Push no está configurado en el servidor.", vi: "Máy chủ chưa cấu hình push notification." },
   "Subscription push không hợp lệ.": { es: "La suscripción push no es válida.", vi: "Subscription push không hợp lệ." },
   "Không thể lưu đăng ký thông báo.": { es: "No se pudo guardar la suscripción.", vi: "Không thể lưu đăng ký thông báo." },
   "Endpoint push là bắt buộc.": { es: "El endpoint push es obligatorio.", vi: "Endpoint push là bắt buộc." },
   "Không thể hủy đăng ký thông báo.": { es: "No se pudo cancelar la suscripción.", vi: "Không thể hủy đăng ký thông báo." }
+};
+
+const PUSH_GATE_COPY_TRANSLATION_KEYS = {
+  eyebrow: "pushGateEyebrow",
+  title: "pushGateTitle",
+  message: "pushGateMessage",
+  details: "pushGateDetails",
+  statusPending: "pushGateStatusPending",
+  statusPendingHint: "pushGateStatusPendingHint",
+  statusDenied: "pushGateStatusDenied",
+  statusDeniedHint: "pushGateStatusDeniedHint",
+  statusSync: "pushGateStatusSync",
+  statusSyncHint: "pushGateStatusSyncHint",
+  statusUnsupported: "pushGateStatusUnsupported",
+  statusUnsupportedHint: "pushGateStatusUnsupportedHint",
+  statusDisabled: "pushGateStatusDisabled",
+  statusDisabledHint: "pushGateStatusDisabledHint",
+  primary: "pushGatePrimary",
+  secondary: "pushGateRetry"
+};
+
+const PUSH_GATE_EDITOR_FIELD_LABEL_KEYS = {
+  eyebrow: "pushGateEditorEyebrowLabel",
+  title: "pushGateEditorTitleLabel",
+  message: "pushGateEditorMessageLabel",
+  details: "pushGateEditorDetailsLabel",
+  statusPending: "pushGateEditorPendingLabel",
+  statusPendingHint: "pushGateEditorPendingHintLabel",
+  statusDenied: "pushGateEditorDeniedLabel",
+  statusDeniedHint: "pushGateEditorDeniedHintLabel",
+  statusSync: "pushGateEditorSyncLabel",
+  statusSyncHint: "pushGateEditorSyncHintLabel",
+  statusUnsupported: "pushGateEditorUnsupportedLabel",
+  statusUnsupportedHint: "pushGateEditorUnsupportedHintLabel",
+  statusDisabled: "pushGateEditorDisabledLabel",
+  statusDisabledHint: "pushGateEditorDisabledHintLabel",
+  primary: "pushGateEditorPrimaryLabel",
+  secondary: "pushGateEditorSecondaryLabel"
+};
+
+const PUSH_GATE_COPY_FIELD_LIMITS = {
+  eyebrow: 60,
+  title: 120,
+  message: 500,
+  details: 500,
+  statusPending: 90,
+  statusPendingHint: 220,
+  statusDenied: 90,
+  statusDeniedHint: 220,
+  statusSync: 90,
+  statusSyncHint: 220,
+  statusUnsupported: 90,
+  statusUnsupportedHint: 220,
+  statusDisabled: 90,
+  statusDisabledHint: 220,
+  primary: 40,
+  secondary: 40
 };
 
 /* ---------- 4. Utility Functions ---------- */
@@ -713,6 +930,69 @@ function getShortLabel(id, fallback = "") {
 
 function getAnnouncementLocaleValue(group, key, fallback = "") {
   return translations[currentLanguage][group]?.[key] ?? fallback;
+}
+
+function getTranslationValue(lang, key, params = {}) {
+  const value = translations[lang]?.[key];
+  return typeof value === "function" ? value(params) : (value ?? key);
+}
+
+function buildDefaultPushGateCopyConfig() {
+  const config = {
+    es: {},
+    vi: {},
+    updatedAt: null,
+    updatedBy: "SYSTEM"
+  };
+
+  ["es", "vi"].forEach((lang) => {
+    Object.entries(PUSH_GATE_COPY_TRANSLATION_KEYS).forEach(([field, key]) => {
+      config[lang][field] = String(getTranslationValue(lang, key)).trim();
+    });
+  });
+
+  return config;
+}
+
+function normalizePushGateCopyConfig(value) {
+  const defaults = buildDefaultPushGateCopyConfig();
+  const normalized = {
+    es: {},
+    vi: {},
+    updatedAt: typeof value?.updatedAt === "string" ? value.updatedAt : defaults.updatedAt,
+    updatedBy: String(value?.updatedBy || defaults.updatedBy).trim() || defaults.updatedBy
+  };
+
+  ["es", "vi"].forEach((lang) => {
+    Object.keys(PUSH_GATE_COPY_TRANSLATION_KEYS).forEach((field) => {
+      const source = value?.[lang]?.[field];
+      normalized[lang][field] =
+        source === undefined || source === null
+          ? defaults[lang][field]
+          : String(source).trim();
+    });
+  });
+
+  return normalized;
+}
+
+function getPushGateCopyConfig() {
+  if (!pushGateCopyConfig) {
+    pushGateCopyConfig = buildDefaultPushGateCopyConfig();
+  }
+  pushGateCopyConfig = normalizePushGateCopyConfig(pushGateCopyConfig);
+  return pushGateCopyConfig;
+}
+
+function getPushGateCopyLocale(lang = currentLanguage) {
+  const locale = lang === "vi" ? "vi" : "es";
+  return getPushGateCopyConfig()[locale];
+}
+
+function applyPushGateCopyConfig(value) {
+  pushGateCopyConfig = normalizePushGateCopyConfig(value);
+  renderPushGateState();
+  renderPushGateEditorMeta();
 }
 
 function getAnnouncementTypeLabel(type) {
@@ -820,6 +1100,7 @@ function setStorePushBusy(isBusy) {
   if (pushActionBtn) {
     pushActionBtn.disabled = isBusy || !storePushState.supported;
   }
+  renderPushGateState();
 }
 
 function renderStorePushState() {
@@ -837,6 +1118,7 @@ function renderStorePushState() {
     pushActionText.textContent = t("pushActionEnable");
     pushActionBadge.textContent = "";
     pushActionBtn.disabled = true;
+    renderPushGateState();
     return;
   }
 
@@ -846,6 +1128,7 @@ function renderStorePushState() {
     pushActionText.textContent = t("pushActionEnable");
     pushActionBadge.textContent = "";
     pushActionBtn.disabled = true;
+    renderPushGateState();
     return;
   }
 
@@ -853,6 +1136,7 @@ function renderStorePushState() {
     pushActionText.textContent = storePushState.subscribed ? t("pushUnsubscribing") : t("pushSubscribing");
     pushActionBadge.textContent = storePushState.subscribed ? t("pushBadgeActive") : t("pushBadgeInactive");
     pushActionBtn.disabled = true;
+    renderPushGateState();
     return;
   }
 
@@ -862,6 +1146,7 @@ function renderStorePushState() {
     pushActionText.textContent = t("pushActionEnable");
     pushActionBadge.textContent = t("pushBadgeInactive");
     pushActionBtn.disabled = false;
+    renderPushGateState();
     return;
   }
 
@@ -870,9 +1155,10 @@ function renderStorePushState() {
     pushStatusHint.textContent = t("pushHintSubscribed", {
       count: Number(storePushState.storeSubscriptions || 0)
     });
-    pushActionText.textContent = t("pushActionDisable");
+    pushActionText.textContent = t("pushActionSync");
     pushActionBadge.textContent = t("pushBadgeActive");
     pushActionBtn.disabled = false;
+    renderPushGateState();
     return;
   }
 
@@ -884,6 +1170,7 @@ function renderStorePushState() {
     permission === "granted" ? t("pushActionSync") : t("pushActionEnable");
   pushActionBadge.textContent = t("pushBadgeInactive");
   pushActionBtn.disabled = false;
+  renderPushGateState();
 }
 
 async function syncStorePushSubscription(subscription, options = {}) {
@@ -926,6 +1213,7 @@ async function loadStorePushStatus(options = {}) {
     storePushState.enabled = Boolean(status.enabled && status.publicKey);
     storePushState.publicKey = status.publicKey || "";
     storePushState.storeSubscriptions = Number(status.storeSubscriptions || 0);
+    applyPushGateCopyConfig(status.gateCopy);
 
     const registration = await registerServiceWorker();
     const subscription = registration ? await registration.pushManager.getSubscription() : null;
@@ -1079,6 +1367,329 @@ function showAnnouncementPushFeedback(pushResult) {
       "success",
       4000
     );
+  }
+}
+
+function readPushAnnouncementRefFromLocation() {
+  const params = new URLSearchParams(window.location.search);
+  const id = String(params.get("pushAnnouncement") || "").trim();
+  const version = String(params.get("pushVersion") || "").trim();
+  return id ? { id, version } : null;
+}
+
+function clearPushAnnouncementRefFromLocation() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("pushAnnouncement");
+  url.searchParams.delete("pushVersion");
+  const nextSearch = url.searchParams.toString();
+  window.history.replaceState({}, "", `${url.pathname}${nextSearch ? `?${nextSearch}` : ""}${url.hash}`);
+}
+
+function primeNotificationAudio() {
+  const AudioCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtor) {
+    return null;
+  }
+
+  if (!notificationAudioContext) {
+    notificationAudioContext = new AudioCtor();
+  }
+
+  notificationAudioContext.resume().catch(() => null);
+  return notificationAudioContext;
+}
+
+function isStorePushMandatorySatisfied() {
+  return Boolean(
+    getRole() === "store" &&
+      getToken() &&
+      storePushState.supported &&
+      storePushState.enabled &&
+      getPushPermissionState() === "granted" &&
+      storePushState.subscribed
+  );
+}
+
+function closePushGateModal(force = false) {
+  if (!pushGateModal) {
+    return;
+  }
+  if (!force && !isStorePushMandatorySatisfied()) {
+    return;
+  }
+  pushGateModal.classList.add("hidden");
+}
+
+function renderPushGateState() {
+  if (
+    !pushGateModal ||
+    !pushGateEyebrow ||
+    !pushGateTitle ||
+    !pushGateMessage ||
+    !pushGateDetails ||
+    !pushGateStatusTitle ||
+    !pushGateStatusHint ||
+    !pushGatePrimaryBtn ||
+    !pushGateSecondaryBtn ||
+    !pushGateLogoutBtn
+  ) {
+    return;
+  }
+
+  const copy = getPushGateCopyLocale();
+  setTextById("pushGateEyebrow", copy.eyebrow);
+  setTextById("pushGateTitle", copy.title);
+  setTextById("pushGateMessage", copy.message);
+  pushGateDetails.textContent = copy.details || "";
+  pushGateDetails.classList.toggle("hidden", !copy.details);
+  setTextById("pushGatePrimaryBtn", copy.primary);
+  setTextById("pushGateSecondaryBtn", copy.secondary);
+  setTextById("pushGateLogoutText", t("logoutBtn"));
+
+  const permission = getPushPermissionState();
+  let title = copy.statusPending;
+  let hint = copy.statusPendingHint;
+
+  if (!storePushState.supported) {
+    title = copy.statusUnsupported;
+    hint = copy.statusUnsupportedHint;
+  } else if (!storePushState.enabled) {
+    title = copy.statusDisabled;
+    hint = copy.statusDisabledHint;
+  } else if (storePushState.busy) {
+    title = copy.statusSync;
+    hint = copy.statusSyncHint;
+  } else if (permission === "denied") {
+    title = copy.statusDenied;
+    hint = copy.statusDeniedHint;
+  } else if (permission === "granted" && !storePushState.subscribed) {
+    title = copy.statusSync;
+    hint = copy.statusSyncHint;
+  }
+
+  pushGateStatusTitle.textContent = title;
+  pushGateStatusHint.textContent = hint;
+
+  const isSatisfied = isStorePushMandatorySatisfied();
+  if (!getToken() || getRole() !== "store") {
+    pushGateModal.classList.add("hidden");
+    return;
+  }
+
+  pushGateModal.classList.toggle("hidden", isSatisfied);
+  pushGatePrimaryBtn.disabled = storePushState.busy || !storePushState.supported || !storePushState.enabled;
+  pushGateSecondaryBtn.disabled = storePushState.busy;
+}
+
+async function ensureStorePushMandatory(options = {}) {
+  const { silent = false } = options;
+  if (getRole() !== "store" || !getToken()) {
+    closePushGateModal(true);
+    return true;
+  }
+
+  await loadStorePushStatus({ syncExisting: true, silent });
+  const satisfied = isStorePushMandatorySatisfied();
+  renderPushGateState();
+  if (!satisfied) {
+    pushGateModal?.classList.remove("hidden");
+  } else {
+    closePushGateModal(true);
+  }
+  return satisfied;
+}
+
+function setPushGateEditorStatus(message = "", type = "") {
+  if (!pushGateEditorStatus) {
+    return;
+  }
+  pushGateEditorStatus.textContent = message || "";
+  pushGateEditorStatus.classList.toggle("is-error", type === "error");
+}
+
+function clearPushGateEditorValidation() {
+  Object.values(pushGateEditorFields).forEach((field) => field?.classList.remove("is-invalid"));
+  setPushGateEditorStatus("");
+}
+
+function getPushGateEditorFieldLabel(field) {
+  const key = PUSH_GATE_EDITOR_FIELD_LABEL_KEYS[field];
+  return key ? t(key) : field;
+}
+
+function renderPushGateEditorMeta() {
+  if (!pushGateEditorMeta) {
+    return;
+  }
+  const config = getPushGateCopyConfig();
+  if (!config.updatedAt) {
+    pushGateEditorMeta.textContent = t("pushGateEditorNoUpdates");
+    return;
+  }
+  pushGateEditorMeta.textContent = t("pushGateEditorUpdatedMeta", {
+    user: config.updatedBy || "",
+    date: formatTimestamp(config.updatedAt)
+  });
+}
+
+function renderPushGateEditorControls() {
+  setTextById("pushGateEditorTitle", t("pushGateEditorTitle"));
+  setTextById("pushGateEditorText", t("pushGateEditorText"));
+  setTextById("pushGateEditorLangLabel", t("pushGateEditorLangLabel"));
+  setTextById("pushGateEditorEyebrowLabel", t("pushGateEditorEyebrowLabel"));
+  setTextById("pushGateEditorTitleLabel", t("pushGateEditorTitleLabel"));
+  setTextById("pushGateEditorMessageLabel", t("pushGateEditorMessageLabel"));
+  setTextById("pushGateEditorDetailsLabel", t("pushGateEditorDetailsLabel"));
+  setTextById("pushGateEditorPendingLabel", t("pushGateEditorPendingLabel"));
+  setTextById("pushGateEditorPendingHintLabel", t("pushGateEditorPendingHintLabel"));
+  setTextById("pushGateEditorDeniedLabel", t("pushGateEditorDeniedLabel"));
+  setTextById("pushGateEditorDeniedHintLabel", t("pushGateEditorDeniedHintLabel"));
+  setTextById("pushGateEditorSyncLabel", t("pushGateEditorSyncLabel"));
+  setTextById("pushGateEditorSyncHintLabel", t("pushGateEditorSyncHintLabel"));
+  setTextById("pushGateEditorUnsupportedLabel", t("pushGateEditorUnsupportedLabel"));
+  setTextById("pushGateEditorUnsupportedHintLabel", t("pushGateEditorUnsupportedHintLabel"));
+  setTextById("pushGateEditorDisabledLabel", t("pushGateEditorDisabledLabel"));
+  setTextById("pushGateEditorDisabledHintLabel", t("pushGateEditorDisabledHintLabel"));
+  setTextById("pushGateEditorPrimaryLabel", t("pushGateEditorPrimaryLabel"));
+  setTextById("pushGateEditorSecondaryLabel", t("pushGateEditorSecondaryLabel"));
+
+  if (pushGateEditorSaveBtn) {
+    pushGateEditorSaveBtn.textContent = pushGateEditorBusy
+      ? t("pushGateEditorSaving")
+      : t("pushGateEditorSave");
+  }
+  if (pushGateEditorResetBtn) {
+    pushGateEditorResetBtn.textContent = t("pushGateEditorReset");
+  }
+  pushGateEditorEsBtn?.classList.toggle("active", pushGateEditorLanguage === "es");
+  pushGateEditorViBtn?.classList.toggle("active", pushGateEditorLanguage === "vi");
+  renderPushGateEditorMeta();
+}
+
+function renderPushGateEditorValues() {
+  const locale = getPushGateCopyLocale(pushGateEditorLanguage);
+  Object.entries(pushGateEditorFields).forEach(([field, input]) => {
+    if (input) {
+      input.value = locale[field] || "";
+      input.classList.remove("is-invalid");
+    }
+  });
+  setPushGateEditorStatus("");
+  renderPushGateEditorControls();
+}
+
+function setPushGateEditorBusy(isBusy) {
+  pushGateEditorBusy = isBusy;
+  if (pushGateEditorSaveBtn) {
+    pushGateEditorSaveBtn.disabled = isBusy;
+  }
+  if (pushGateEditorResetBtn) {
+    pushGateEditorResetBtn.disabled = isBusy;
+  }
+  if (pushGateEditorEsBtn) {
+    pushGateEditorEsBtn.disabled = isBusy;
+  }
+  if (pushGateEditorViBtn) {
+    pushGateEditorViBtn.disabled = isBusy;
+  }
+  renderPushGateEditorControls();
+}
+
+function validatePushGateEditorForm() {
+  clearPushGateEditorValidation();
+
+  const values = {};
+  const errors = {};
+
+  Object.entries(pushGateEditorFields).forEach(([field, input]) => {
+    const value = String(input?.value || "").trim();
+    const maxLength = PUSH_GATE_COPY_FIELD_LIMITS[field] || 500;
+    const label = getPushGateEditorFieldLabel(field);
+    values[field] = value;
+
+    if (field !== "details" && !value) {
+      errors[field] = t("pushGateEditorValidationRequired", { field: label });
+    } else if (value.length > maxLength) {
+      errors[field] = t("pushGateEditorValidationTooLong", { field: label, max: maxLength });
+    }
+  });
+
+  Object.keys(errors).forEach((field) => {
+    pushGateEditorFields[field]?.classList.add("is-invalid");
+  });
+
+  if (Object.keys(errors).length > 0) {
+    setPushGateEditorStatus(
+      Object.values(errors)[0] || t("pushGateEditorInvalid"),
+      "error"
+    );
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    values
+  };
+}
+
+async function loadAdminPushGateCopyConfig(options = {}) {
+  const { forceRefresh = false, silent = false } = options;
+  if (getRole() !== "admin" || !getToken()) {
+    return;
+  }
+
+  if (!silent) {
+    setPushGateEditorStatus(t("pushGateEditorLoading"));
+  }
+
+  try {
+    const params = forceRefresh ? `?refresh=1&t=${Date.now()}` : "";
+    const data = await apiFetch(`/api/admin/push-gate-copy${params}`);
+    applyPushGateCopyConfig(data);
+    renderPushGateEditorValues();
+  } catch (error) {
+    setPushGateEditorStatus(error.message || t("pushGateEditorLoadError"), "error");
+    if (!silent) {
+      showToast(error.message || t("pushGateEditorLoadError"), "error");
+    }
+  }
+}
+
+function resetPushGateEditorValuesToDefault() {
+  const defaults = buildDefaultPushGateCopyConfig()[pushGateEditorLanguage];
+  Object.entries(pushGateEditorFields).forEach(([field, input]) => {
+    if (input) {
+      input.value = defaults[field] || "";
+      input.classList.remove("is-invalid");
+    }
+  });
+  setPushGateEditorStatus(t("pushGateEditorResetDone"));
+}
+
+async function saveAdminPushGateCopyConfig() {
+  const validation = validatePushGateEditorForm();
+  if (!validation.isValid) {
+    return;
+  }
+
+  setPushGateEditorBusy(true);
+  try {
+    const data = await apiFetch(`/api/admin/push-gate-copy/${pushGateEditorLanguage}`, {
+      method: "PUT",
+      body: JSON.stringify(validation.values)
+    });
+    applyPushGateCopyConfig(data);
+    renderPushGateEditorValues();
+    showToast(t("pushGateEditorSaveDone"), "success");
+  } catch (error) {
+    if (error.fieldErrors) {
+      Object.keys(error.fieldErrors).forEach((field) => {
+        pushGateEditorFields[field]?.classList.add("is-invalid");
+      });
+    }
+    setPushGateEditorStatus(error.message || t("pushGateEditorInvalid"), "error");
+    showToast(error.message || t("pushGateEditorInvalid"), "error");
+  } finally {
+    setPushGateEditorBusy(false);
   }
 }
 
@@ -1254,6 +1865,7 @@ function applyStaticTranslations() {
   setTextById("adminMoreLangTitle", t("moreLangTitle"));
   setTextById("adminMoreLangLabel", t("moreLangLabel"));
   setTextById("adminMoreActionsTitle", t("moreActionsTitle"));
+  renderPushGateEditorControls();
 
   // Announcement admin
   setTextById("adminAnnouncementSectionTitle", t("announcementSectionTitle"));
@@ -1271,6 +1883,9 @@ function applyStaticTranslations() {
   setTextById("annNotifyPushHint", t("announcementNotifyPushHint"));
   setTextById("annFilterLabel", t("announcementFilterLabel"));
   setTextById("annCancelEditBtn", t("announcementCancel"));
+  setTextById("pushModalEyebrow", t("pushModalEyebrow"));
+  setTextById("pushModalViewBtn", t("pushModalView"));
+  setTextById("pushModalDismissBtn", t("pushModalDismiss"));
   if (annTitleInput) annTitleInput.placeholder = t("announcementTitlePlaceholder");
   if (annMessageInput) annMessageInput.placeholder = t("announcementMessagePlaceholder");
   if (annAreaInput) annAreaInput.placeholder = t("announcementAreaPlaceholder");
@@ -1294,6 +1909,9 @@ function applyStaticTranslations() {
   }
   setAnnouncementFormBusy(false);
   renderStorePushState();
+  if (foregroundPushAnnouncement) {
+    renderPushAnnouncementModal(foregroundPushAnnouncement);
+  }
 
   syncAllLangButtons();
 
@@ -1602,6 +2220,7 @@ function renderStoreDashboard(data) {
   data.categories.forEach((cat, i) => categoriesGrid.appendChild(buildCategoryCard(cat, i)));
 
   renderHistory(historyGrid, data.history, data.today.date);
+  maybeOpenPendingPushAnnouncement(data.announcements || []);
 }
 
 /* ---------- 13. Admin Dashboard Renderer ---------- */
@@ -1821,6 +2440,7 @@ async function loadStoreDashboard(forceRefresh = false) {
     const data = await apiFetch(url);
     renderStoreDashboard(data);
     showStoreApp();
+    ensureStorePushMandatory({ silent: true });
     if (forceRefresh) showToast(t("dashboardSynced"), "success");
   } catch (err) {
     clearSession();
@@ -1901,6 +2521,11 @@ async function handleLogout() {
   storeSearchInput.value = "";
   if (adminAnnouncementsGrid) adminAnnouncementsGrid.innerHTML = "";
   resetAnnForm();
+  foregroundPushAnnouncement = null;
+  pendingPushAnnouncementPayload = null;
+  pendingPushAnnouncementRef = null;
+  closePushAnnouncementModal();
+  closePushGateModal(true);
   storePushState = {
     supported: isPushSupported(),
     enabled: false,
@@ -1910,6 +2535,10 @@ async function handleLogout() {
     publicKey: "",
     storeSubscriptions: 0
   };
+  pushGateCopyConfig = buildDefaultPushGateCopyConfig();
+  pushGateEditorLanguage = currentLanguage === "vi" ? "vi" : "es";
+  setPushGateEditorBusy(false);
+  renderPushGateEditorValues();
   renderStorePushState();
   clearSession();
   showLogin();
@@ -1957,15 +2586,16 @@ loginForm.addEventListener("submit", async (e) => {
       // Show admin app immediately with loading state, then fetch dashboard async
       showAdminApp();
       showToast(t("loginLoading"), "info", 3000);
+      loadAdminPushGateCopyConfig({ silent: true });
       loadAdminDashboard(true);
     } else if (data.dashboard) {
       renderStoreDashboard(data.dashboard);
       showStoreApp();
-      loadStorePushStatus({ syncExisting: true, silent: true });
+      ensureStorePushMandatory({ silent: true });
     } else {
       showStoreApp();
       loadStoreDashboard(true);
-      loadStorePushStatus({ syncExisting: true, silent: true });
+      ensureStorePushMandatory({ silent: true });
     }
   } catch (err) {
     clearSession();
@@ -1980,11 +2610,41 @@ refreshBtn.addEventListener("click", () => loadStoreDashboard(true));
 logoutBtn.addEventListener("click", handleLogout);
 if (pushActionBtn) {
   pushActionBtn.addEventListener("click", () => {
-    if (storePushState.subscribed) {
-      unsubscribeStorePush();
-    } else {
-      subscribeStorePush();
-    }
+    subscribeStorePush();
+  });
+}
+if (pushGatePrimaryBtn) {
+  pushGatePrimaryBtn.addEventListener("click", () => {
+    subscribeStorePush();
+  });
+}
+if (pushGateSecondaryBtn) {
+  pushGateSecondaryBtn.addEventListener("click", () => {
+    ensureStorePushMandatory();
+  });
+}
+if (pushGateLogoutBtn) {
+  pushGateLogoutBtn.addEventListener("click", handleLogout);
+}
+if (pushGateEditorEsBtn) {
+  pushGateEditorEsBtn.addEventListener("click", () => {
+    pushGateEditorLanguage = "es";
+    renderPushGateEditorValues();
+  });
+}
+if (pushGateEditorViBtn) {
+  pushGateEditorViBtn.addEventListener("click", () => {
+    pushGateEditorLanguage = "vi";
+    renderPushGateEditorValues();
+  });
+}
+if (pushGateEditorResetBtn) {
+  pushGateEditorResetBtn.addEventListener("click", resetPushGateEditorValuesToDefault);
+}
+if (pushGateEditorForm) {
+  pushGateEditorForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveAdminPushGateCopyConfig();
   });
 }
 adminRefreshBtn.addEventListener("click", () => {
@@ -1993,6 +2653,9 @@ adminRefreshBtn.addEventListener("click", () => {
   if (activeAdminTab === "adminAnnouncementsTab") {
     loadAnnouncementTargets(true);
     loadAdminAnnouncements(true);
+  }
+  if (activeAdminTab === "adminMoreTab") {
+    loadAdminPushGateCopyConfig({ forceRefresh: true });
   }
 });
 adminLogoutBtn.addEventListener("click", handleLogout);
@@ -2066,6 +2729,183 @@ const ANN_TYPE_META = {
   urgent:  { border: "#ef4444", bg: "rgba(239,68,68,0.12)",  color: "#f87171" },
   success: { border: "#10b981", bg: "rgba(16,185,129,0.12)", color: "#34d399" }
 };
+
+function playForegroundAnnouncementSound() {
+  const audioContext = primeNotificationAudio();
+  if (!audioContext || audioContext.state !== "running") {
+    window.__lastPushSoundState = {
+      played: false,
+      blocked: true,
+      at: Date.now()
+    };
+    return false;
+  }
+
+  const steps = [
+    { frequency: 880, duration: 0.11, gap: 0.05 },
+    { frequency: 1174, duration: 0.14, gap: 0.05 },
+    { frequency: 880, duration: 0.12, gap: 0 }
+  ];
+  let cursor = audioContext.currentTime + 0.02;
+
+  steps.forEach((step) => {
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    oscillator.type = "triangle";
+    oscillator.frequency.setValueAtTime(step.frequency, cursor);
+    gainNode.gain.setValueAtTime(0.0001, cursor);
+    gainNode.gain.exponentialRampToValueAtTime(0.18, cursor + 0.015);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, cursor + step.duration);
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    oscillator.start(cursor);
+    oscillator.stop(cursor + step.duration);
+    cursor += step.duration + step.gap;
+  });
+
+  window.__lastPushSoundState = {
+    played: true,
+    blocked: false,
+    at: Date.now()
+  };
+  return true;
+}
+
+function triggerForegroundAnnouncementCue(options = {}) {
+  const shouldPlaySound = options.playSound !== false;
+  let soundPlayed = false;
+
+  if (shouldPlaySound) {
+    soundPlayed = playForegroundAnnouncementSound();
+    if (!soundPlayed) {
+      showToast(t("pushModalAudioLocked"), "info", 4200);
+    }
+  }
+
+  if (navigator.vibrate) {
+    navigator.vibrate([240, 120, 240, 120, 320]);
+  }
+
+  return { soundPlayed };
+}
+
+function getAnnouncementTargetSummary(announcement) {
+  if (!announcement) {
+    return t("pushModalTargetNow");
+  }
+  if (announcement.target === "store") {
+    return t("announcementTargetStoreLabel", { code: announcement.targetStore || "-" });
+  }
+  if (announcement.target === "area") {
+    return t("announcementTargetAreaLabel", { area: announcement.targetArea || "-" });
+  }
+  return t("announcementTargetAllLabel");
+}
+
+function closePushAnnouncementModal() {
+  if (!pushAnnouncementModal) {
+    return;
+  }
+  pushAnnouncementModal.classList.add("hidden");
+}
+
+function renderPushAnnouncementModal(announcement) {
+  if (!pushAnnouncementModal || !announcement) {
+    return;
+  }
+
+  const meta = ANN_TYPE_META[announcement.type] || ANN_TYPE_META.info;
+  const emoji = announcement.emoji || (announcement.type === "urgent" ? "🚨" : "📢");
+  if (pushModalEyebrow) pushModalEyebrow.textContent = t("pushModalEyebrow");
+  if (pushModalTitle) pushModalTitle.textContent = announcement.title || t("pushModalTargetNow");
+  if (pushModalMessage) pushModalMessage.textContent = announcement.message || "";
+  if (pushModalTarget) pushModalTarget.textContent = getAnnouncementTargetSummary(announcement);
+  if (pushModalTime) {
+    pushModalTime.textContent = formatTimestamp(announcement.updatedAt || announcement.createdAt || new Date().toISOString());
+  }
+  if (pushModalTypeBadge) {
+    pushModalTypeBadge.textContent = `${emoji} ${getAnnouncementTypeBadge(announcement.type)}`;
+    pushModalTypeBadge.style.background = meta.bg;
+    pushModalTypeBadge.style.color = meta.color;
+  }
+  if (pushModalViewBtn) pushModalViewBtn.textContent = t("pushModalView");
+  if (pushModalDismissBtn) pushModalDismissBtn.textContent = t("pushModalDismiss");
+}
+
+function openStoreAnnouncementModal(announcement, options = {}) {
+  if (!announcement || !pushAnnouncementModal) {
+    return;
+  }
+
+  const currentKey = announcement.version || `${announcement.id || ""}:${announcement.updatedAt || announcement.createdAt || ""}`;
+  const activeKey = foregroundPushAnnouncement?.version ||
+    `${foregroundPushAnnouncement?.id || ""}:${foregroundPushAnnouncement?.updatedAt || foregroundPushAnnouncement?.createdAt || ""}`;
+  if (!pushAnnouncementModal.classList.contains("hidden") && currentKey && activeKey === currentKey) {
+    return;
+  }
+
+  foregroundPushAnnouncement = announcement;
+  renderPushAnnouncementModal(announcement);
+  showStoreApp();
+  switchTab($("storeNav"), storeApp, "storeHomeTab");
+  activeStoreTab = "storeHomeTab";
+  pushAnnouncementModal.classList.remove("hidden");
+  const cue = triggerForegroundAnnouncementCue(options);
+  window.__lastForegroundAnnouncementAlert = {
+    key: currentKey,
+    shownAt: Date.now(),
+    soundPlayed: cue.soundPlayed,
+    title: announcement.title || ""
+  };
+}
+
+function maybeOpenPendingPushAnnouncement(announcements = []) {
+  if (!pendingPushAnnouncementRef) {
+    return;
+  }
+
+  const match = (Array.isArray(announcements) ? announcements : []).find((announcement) => {
+    if (announcement.id !== pendingPushAnnouncementRef.id) {
+      return false;
+    }
+    if (!pendingPushAnnouncementRef.version) {
+      return true;
+    }
+    return (announcement.version || announcement.updatedAt || "") === pendingPushAnnouncementRef.version;
+  });
+
+  if (!match) {
+    return;
+  }
+
+  pendingPushAnnouncementRef = null;
+  clearPushAnnouncementRefFromLocation();
+  openStoreAnnouncementModal(match, { playSound: true });
+}
+
+function handleIncomingPushAnnouncement(payload, options = {}) {
+  const announcement = payload?.announcement || null;
+  const shouldForceOpen = options.forceOpen === true;
+  if (!announcement) {
+    if (getRole() === "store" && getToken()) {
+      loadStoreDashboard();
+    }
+    return;
+  }
+
+  if (document.visibilityState !== "visible" && !shouldForceOpen) {
+    pendingPushAnnouncementPayload = payload;
+    return;
+  }
+
+  if (shouldForceOpen) {
+    showStoreApp();
+  }
+  openStoreAnnouncementModal(announcement, { playSound: payload?.playSound !== false });
+  if (getRole() === "store" && getToken()) {
+    loadStoreDashboard();
+  }
+}
 
 let annCurrentSlide = 0;
 let annTotal = 0;
@@ -2671,6 +3511,9 @@ document.querySelectorAll("#adminNav .nav-btn").forEach((btn) => {
       loadAnnouncementTargets();
       loadAdminAnnouncements();
     }
+    if (tabId === "adminMoreTab") {
+      loadAdminPushGateCopyConfig({ silent: true });
+    }
   });
 });
 
@@ -2753,6 +3596,50 @@ closeSimulatorBtn.addEventListener("click", () => {
     simulatorModal.classList.add("hidden");
 });
 
+if (pushModalDismissBtn) {
+  pushModalDismissBtn.addEventListener("click", closePushAnnouncementModal);
+}
+
+if (closePushModalBtn) {
+  closePushModalBtn.addEventListener("click", closePushAnnouncementModal);
+}
+
+if (pushModalViewBtn) {
+  pushModalViewBtn.addEventListener("click", () => {
+    closePushAnnouncementModal();
+    showStoreApp();
+    switchTab($("storeNav"), storeApp, "storeHomeTab");
+    activeStoreTab = "storeHomeTab";
+    storeContent?.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+
+if (pushAnnouncementModal) {
+  pushAnnouncementModal.addEventListener("click", (event) => {
+    if (event.target === pushAnnouncementModal) {
+      closePushAnnouncementModal();
+    }
+  });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && pushAnnouncementModal && !pushAnnouncementModal.classList.contains("hidden")) {
+    closePushAnnouncementModal();
+  }
+});
+
+["pointerdown", "touchstart", "keydown"].forEach((eventName) => {
+  window.addEventListener(eventName, primeNotificationAudio, { passive: eventName !== "keydown" });
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && pendingPushAnnouncementPayload && getRole() === "store" && getToken()) {
+    const payload = pendingPushAnnouncementPayload;
+    pendingPushAnnouncementPayload = null;
+    handleIncomingPushAnnouncement(payload, { forceOpen: true });
+  }
+});
+
 
 // Install buttons
 const moreInstallBtn = $("moreInstallBtn");
@@ -2786,9 +3673,15 @@ if (storeContent && pullIndicator) {
 /* ---------- 19. Service Worker ---------- */
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("message", (event) => {
-    if (event.data?.type === "announcement-push" && getRole() === "store" && getToken()) {
+    if (getRole() !== "store" || !getToken()) {
+      return;
+    }
+    if (event.data?.type === "announcement-push") {
       showToast(t("pushMessageReceived"), "success", 2500);
-      loadStoreDashboard();
+      handleIncomingPushAnnouncement(event.data.payload || {}, { forceOpen: false });
+    }
+    if (event.data?.type === "announcement-open") {
+      handleIncomingPushAnnouncement(event.data.payload || {}, { forceOpen: true });
     }
   });
   window.addEventListener("load", () => {
@@ -2800,18 +3693,21 @@ if ("serviceWorker" in navigator) {
 if (adminAnnouncementForm) {
   resetAnnForm();
 }
+pendingPushAnnouncementRef = readPushAnnouncementRefFromLocation();
 updateAnnouncementTargetVisibility();
 applyStaticTranslations();
+renderPushGateEditorValues();
 
 if (getToken()) {
   if (getRole() === "admin") {
     showAdminApp();
     adminCurrentPage = 1;
+    loadAdminPushGateCopyConfig({ silent: true });
     loadAdminDashboard(true);
   } else {
     showStoreApp();
     loadStoreDashboard(true);
-    loadStorePushStatus({ syncExisting: true, silent: true });
+    ensureStorePushMandatory({ silent: true });
   }
 } else {
   showLogin();

@@ -150,6 +150,105 @@ const ANNOUNCEMENT_TARGETS = new Set(["all", "area", "store"]);
 const ANNOUNCEMENTS_FILE = path.join(__dirname, "data", "announcements.json");
 const PUSH_SUBSCRIPTIONS_FILE = path.join(__dirname, "data", "push-subscriptions.json");
 const PUSH_VAPID_KEYS_FILE = path.join(__dirname, "data", "push-vapid-keys.json");
+const PUSH_GATE_COPY_FILE = path.join(__dirname, "data", "push-gate-copy.json");
+const PUSH_GATE_COPY_LANGUAGES = new Set(["es", "vi"]);
+const PUSH_GATE_COPY_FIELDS = [
+  "eyebrow",
+  "title",
+  "message",
+  "details",
+  "statusPending",
+  "statusPendingHint",
+  "statusDenied",
+  "statusDeniedHint",
+  "statusSync",
+  "statusSyncHint",
+  "statusUnsupported",
+  "statusUnsupportedHint",
+  "statusDisabled",
+  "statusDisabledHint",
+  "primary",
+  "secondary"
+];
+const PUSH_GATE_COPY_FIELD_LIMITS = {
+  eyebrow: 60,
+  title: 120,
+  message: 500,
+  details: 500,
+  statusPending: 90,
+  statusPendingHint: 220,
+  statusDenied: 90,
+  statusDeniedHint: 220,
+  statusSync: 90,
+  statusSyncHint: 220,
+  statusUnsupported: 90,
+  statusUnsupportedHint: 220,
+  statusDisabled: 90,
+  statusDisabledHint: 220,
+  primary: 40,
+  secondary: 40
+};
+const PUSH_GATE_COPY_FIELD_LABELS = {
+  eyebrow: "nhãn mở đầu",
+  title: "tiêu đề popup",
+  message: "nội dung chính",
+  details: "nội dung bổ sung",
+  statusPending: "tiêu đề trạng thái chờ",
+  statusPendingHint: "mô tả trạng thái chờ",
+  statusDenied: "tiêu đề trạng thái bị chặn",
+  statusDeniedHint: "mô tả trạng thái bị chặn",
+  statusSync: "tiêu đề trạng thái đồng bộ",
+  statusSyncHint: "mô tả trạng thái đồng bộ",
+  statusUnsupported: "tiêu đề trạng thái không hỗ trợ",
+  statusUnsupportedHint: "mô tả trạng thái không hỗ trợ",
+  statusDisabled: "tiêu đề trạng thái máy chủ chưa bật push",
+  statusDisabledHint: "mô tả trạng thái máy chủ chưa bật push",
+  primary: "nút bật thông báo",
+  secondary: "nút xác nhận đã bật"
+};
+const PUSH_GATE_COPY_DEFAULTS = {
+  es: {
+    eyebrow: "Notificación obligatoria",
+    title: "Activa las notificaciones para continuar",
+    message:
+      "Este punto de venta debe mantener activas las notificaciones push para recibir avisos y alertas operativas.",
+    details:
+      "Acepta la solicitud del navegador para que el equipo reciba anuncios urgentes, cambios operativos y recordatorios importantes incluso con la app cerrada.",
+    statusPending: "Esperando permiso del navegador",
+    statusPendingHint: "Pulsa el botón y acepta la solicitud del navegador.",
+    statusDenied: "Las notificaciones están bloqueadas",
+    statusDeniedHint:
+      "Debes habilitarlas en la configuración del navegador y luego tocar \"Ya lo habilité\".",
+    statusSync: "Sincronizando este dispositivo",
+    statusSyncHint: "Estamos registrando este equipo para recibir anuncios obligatorios.",
+    statusUnsupported: "Este navegador no es compatible",
+    statusUnsupportedHint: "Usa Chrome Android o la PWA instalada para continuar.",
+    statusDisabled: "El servidor aún no permite push",
+    statusDisabledHint: "La app no puede continuar hasta que push esté disponible en el servidor.",
+    primary: "Activar ahora",
+    secondary: "Ya lo habilité"
+  },
+  vi: {
+    eyebrow: "Bắt buộc bật thông báo",
+    title: "Bật thông báo để tiếp tục",
+    message:
+      "Điểm bán này phải luôn bật push notification để nhận announcement và cảnh báo vận hành.",
+    details:
+      "Hãy chấp nhận hộp thoại của trình duyệt để thiết bị nhận ngay thông báo khẩn, thay đổi vận hành và nhắc việc quan trọng kể cả khi app đã đóng.",
+    statusPending: "Đang chờ quyền từ trình duyệt",
+    statusPendingHint: "Bấm nút bên dưới và chấp nhận hộp thoại cấp quyền.",
+    statusDenied: "Thông báo đang bị chặn",
+    statusDeniedHint: "Hãy bật lại trong cài đặt trình duyệt rồi bấm \"Tôi đã bật xong\".",
+    statusSync: "Đang đồng bộ thiết bị này",
+    statusSyncHint: "Đang đăng ký thiết bị để nhận thông báo bắt buộc.",
+    statusUnsupported: "Trình duyệt này không hỗ trợ",
+    statusUnsupportedHint: "Hãy dùng Chrome Android hoặc bản PWA đã cài để tiếp tục.",
+    statusDisabled: "Máy chủ chưa bật push",
+    statusDisabledHint: "App chưa thể tiếp tục cho tới khi máy chủ bật push.",
+    primary: "Bật ngay",
+    secondary: "Tôi đã bật xong"
+  }
+};
 let pushConfigPromise = null;
 
 function getAnnouncementTimeZoneParts(date, timeZone) {
@@ -536,6 +635,90 @@ async function saveJsonFile(filePath, value) {
   await fs.writeFile(filePath, JSON.stringify(value, null, 2), "utf-8");
 }
 
+function clonePushGateCopyDefaults() {
+  return {
+    es: { ...PUSH_GATE_COPY_DEFAULTS.es },
+    vi: { ...PUSH_GATE_COPY_DEFAULTS.vi },
+    updatedAt: null,
+    updatedBy: "SYSTEM"
+  };
+}
+
+function normalizePushGateCopyLocale(content = {}, fallback = {}) {
+  const normalized = {};
+  PUSH_GATE_COPY_FIELDS.forEach((field) => {
+    const value = content?.[field];
+    if (value === undefined || value === null) {
+      normalized[field] = String(fallback[field] || "").trim();
+      return;
+    }
+    normalized[field] = String(value).trim();
+  });
+  return normalized;
+}
+
+function normalizePushGateCopyConfig(record = {}) {
+  const defaults = clonePushGateCopyDefaults();
+  return {
+    es: normalizePushGateCopyLocale(record.es, defaults.es),
+    vi: normalizePushGateCopyLocale(record.vi, defaults.vi),
+    updatedAt: parseAnnouncementTimestamp(record.updatedAt),
+    updatedBy: String(record.updatedBy || defaults.updatedBy).trim() || defaults.updatedBy
+  };
+}
+
+async function loadPushGateCopyConfig() {
+  const parsed = await loadJsonFile(PUSH_GATE_COPY_FILE, null);
+  return normalizePushGateCopyConfig(parsed || {});
+}
+
+async function savePushGateCopyConfig(config) {
+  const normalized = normalizePushGateCopyConfig(config);
+  await saveJsonFile(PUSH_GATE_COPY_FILE, normalized);
+  return normalized;
+}
+
+function validatePushGateCopyLocalePayload(language, body, existingConfig, updatedBy = "ADMIN") {
+  const errors = {};
+
+  if (!PUSH_GATE_COPY_LANGUAGES.has(language)) {
+    errors.language = "Ngôn ngữ popup không hợp lệ.";
+    return { errors, value: null };
+  }
+
+  const currentConfig = normalizePushGateCopyConfig(existingConfig || {});
+  const rawContent = body && typeof body === "object" ? body : {};
+  const localeContent = {};
+
+  PUSH_GATE_COPY_FIELDS.forEach((field) => {
+    const value = String(rawContent[field] ?? currentConfig[language][field] ?? "").trim();
+    const maxLength = PUSH_GATE_COPY_FIELD_LIMITS[field] || 500;
+    const label = PUSH_GATE_COPY_FIELD_LABELS[field] || field;
+
+    if (field !== "details" && !value) {
+      errors[field] = `Trường ${label} là bắt buộc.`;
+    } else if (value.length > maxLength) {
+      errors[field] = `Trường ${label} không được vượt quá ${maxLength} ký tự.`;
+    }
+
+    localeContent[field] = value;
+  });
+
+  if (Object.keys(errors).length > 0) {
+    return { errors, value: null };
+  }
+
+  return {
+    errors: null,
+    value: normalizePushGateCopyConfig({
+      ...currentConfig,
+      [language]: localeContent,
+      updatedAt: new Date().toISOString(),
+      updatedBy: String(updatedBy).trim() || currentConfig.updatedBy || "ADMIN"
+    })
+  };
+}
+
 function normalizePushSubscriptionRecord(record = {}) {
   const subscription = record.subscription && typeof record.subscription === "object"
     ? record.subscription
@@ -689,16 +872,25 @@ function getPushSubscriptionsForAnnouncement(announcement, subscriptions) {
 
 function buildAnnouncementPushPayload(announcement) {
   const emoji = String(announcement.emoji || "").trim();
+  const pushUrl = `/?pushAnnouncement=${encodeURIComponent(announcement.id)}&pushVersion=${encodeURIComponent(
+    announcement.version || announcement.updatedAt || ""
+  )}`;
   return {
     type: "announcement-push",
     title: `${emoji ? `${emoji} ` : ""}${announcement.title || "Nuevo anuncio"}`.trim(),
     body: String(announcement.message || "").trim(),
     tag: `announcement:${announcement.id}:${announcement.version || announcement.updatedAt || ""}`,
     renotify: true,
-    requireInteraction: announcement.type === "urgent",
-    url: "/",
+    requireInteraction: true,
+    playSound: true,
+    vibrate: [240, 120, 240, 120, 360],
+    url: pushUrl,
     icon: "/icons/icon-192.svg",
     badge: "/icons/icon-192.svg",
+    actions: [
+      { action: "open", title: "Ver ahora" },
+      { action: "dismiss", title: "Cerrar" }
+    ],
     announcement: {
       id: announcement.id,
       version: announcement.version,
@@ -2030,10 +2222,12 @@ app.get("/api/store/push/status", authenticate, requireRole("store"), async (req
   try {
     const config = await getWebPushConfig();
     const subscriptions = await loadPushSubscriptions();
+    const gateCopy = await loadPushGateCopyConfig();
     return res.json({
       enabled: Boolean(config.enabled && config.publicKey),
       publicKey: config.publicKey || "",
-      storeSubscriptions: subscriptions.filter((record) => record.storeCode === req.session.code).length
+      storeSubscriptions: subscriptions.filter((record) => record.storeCode === req.session.code).length,
+      gateCopy
     });
   } catch (error) {
     console.error("Push status error:", error);
@@ -2273,6 +2467,40 @@ app.get("/api/admin/announcements", authenticate, requireRole("admin"), async (_
   } catch (err) {
     console.error("Admin announcements error:", err);
     return jsonError(res, 500, "Không thể tải danh sách thông báo.");
+  }
+});
+
+app.get("/api/admin/push-gate-copy", authenticate, requireRole("admin"), async (_req, res) => {
+  try {
+    return res.json(await loadPushGateCopyConfig());
+  } catch (err) {
+    console.error("Admin push gate copy load error:", err);
+    return jsonError(res, 500, "Không thể tải nội dung popup bật thông báo.");
+  }
+});
+
+app.put("/api/admin/push-gate-copy/:language", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    const currentConfig = await loadPushGateCopyConfig();
+    const language = String(req.params.language || "").trim().toLowerCase();
+    const { errors, value } = validatePushGateCopyLocalePayload(
+      language,
+      req.body,
+      currentConfig,
+      req.session.username || "ADMIN"
+    );
+
+    if (errors) {
+      return res.status(400).json({
+        error: "Dữ liệu popup bật thông báo không hợp lệ.",
+        fieldErrors: errors
+      });
+    }
+
+    return res.json(await savePushGateCopyConfig(value));
+  } catch (err) {
+    console.error("Admin push gate copy save error:", err);
+    return jsonError(res, 500, "Không thể lưu nội dung popup bật thông báo.");
   }
 });
 
